@@ -147,14 +147,23 @@ def check_stage_greetings():
                             page.wait_for_timeout(3000)
                             print(f"  {theater} 극장")
 
-                            # 주말 날짜 확인
-                            buttons = page.query_selector_all("button")
-                            for btn in buttons:
+                            # 주말 날짜 확인 - button 또는 클릭 가능한 요소 찾기
+                            # 먼저 현재 페이지에서 무대인사가 있는지 바로 확인
+                            body_text = page.inner_text("body")
+                            if "무대인사" in body_text:
+                                print(f"    → 무대인사 텍스트 발견!")
+
+                            # 날짜 버튼 찾기 (button, div, span 등)
+                            date_elements = page.query_selector_all("button, [role='button'], .date-item, [class*='date']")
+                            print(f"    날짜 요소 {len(date_elements)}개")
+
+                            for btn in date_elements:
                                 try:
                                     btn_text = btn.inner_text()
                                     has_weekend = "토" in btn_text or "일" in btn_text
                                     date_match = re.search(r'(\d{1,2})', btn_text)
                                     if has_weekend and date_match:
+                                        print(f"    주말 날짜 발견: {btn_text.replace(chr(10), ' ')}")
                                         date_num = date_match
                                         btn.click(force=True)
                                         page.wait_for_timeout(2500)
