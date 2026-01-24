@@ -149,6 +149,13 @@ def check_stage_greetings():
 
                             # 현재 페이지에서 무대인사 직접 파싱
                             body_text = page.inner_text("body")
+
+                            # 디버그: 무대인사 주변 텍스트 출력
+                            if "무대인사" in body_text:
+                                idx = body_text.find("무대인사")
+                                context = body_text[max(0,idx-200):idx+50].replace('\n', '|')
+                                print(f"    [DEBUG] 무대인사 컨텍스트: ...{context}...")
+
                             if "무대인사" in body_text:
                                 body_lines = [l.strip() for l in body_text.split('\n')]
                                 hall = ""
