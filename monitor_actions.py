@@ -162,6 +162,11 @@ def check_stage_greetings():
 
                             # 필터 적용 후 상영 시간 파싱 (필터 적용 시 모든 표시된 상영이 무대인사)
                             body_text = page.inner_text("body")
+
+                            # 디버그: 시간 패턴 찾기
+                            time_patterns = re.findall(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}', body_text)
+                            if time_patterns:
+                                print(f"    [DEBUG] 시간 패턴 {len(time_patterns)}개: {time_patterns[:3]}")
                             body_lines = [l.strip() for l in body_text.split('\n')]
                             hall = ""
                             today = datetime.now()
