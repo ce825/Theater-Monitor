@@ -147,47 +147,45 @@ def check_stage_greetings():
                             page.wait_for_timeout(3000)
                             print(f"  {theater} 극장")
 
-                            # 상영 시간표에서 무대인사 파싱
-                            body_text = page.inner_text("body")
+                            # DOM에서 무대인사 상영 찾기
                             today = datetime.now()
                             date_str = f"{today.month}월 {today.day}일"
                             weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
 
-                            # 디버그: 페이지에 무대인사가 있는지 확인
-                            if "무대인사" in body_text:
-                                # 무대인사 주변 컨텍스트 출력 (각 위치)
-                                for idx in [m.start() for m in re.finditer(r'무대인사', body_text)][:2]:
-                                    context = body_text[max(0, idx-100):idx+20].replace('\n', '|')
-                                    print(f"    [DEBUG] 무대인사 컨텍스트: {context}")
+                            # 무대인사 태그가 있는 요소 찾기 (다양한 선택자 시도)
+                            stage_elements = page.query_selector_all("[class*='stage'], [class*='event'], .tag, .badge, span:has-text('무대인사')")
+                            print(f"    stage 요소: {len(stage_elements)}개")
 
-                            # 정규식으로 "시간-시간" 다음에 "무대인사"가 오는 패턴 찾기
-                            # 예: "17:40-19:40\n5/170석\n무대인사"
-                            pattern = r'(\d{1,2}:\d{2})-\d{1,2}:\d{2}[^\n]*\n[^\n]*\n무대인사'
-                            matches = re.findall(pattern, body_text)
+                            # 시간 요소 찾기
+                            time_elements = page.query_selector_all("[class*='time'], [class*='start']")
+                            print(f"    time 요소: {len(time_elements)}개")
 
-                            if matches:
-                                print(f"    [발견] 무대인사 시간: {matches}")
-                                # 상영관 정보 찾기
-                                for start_time in matches:
-                                    idx = body_text.find(f"{start_time}-")
-                                    hall = ""
-                                    if idx > 0:
-                                        prev_text = body_text[max(0, idx-300):idx]
-                                        hall_m = re.findall(r'(\d+관[^\n]*)', prev_text)
-                                        if hall_m:
-                                            hall = hall_m[-1][:40]
+                            # 전체 HTML 확인
+                            html = page.content()
+                            if '무대인사' in html:
+                                # HTML에서 무대인사 주변 찾기
+                                idx = html.find('무대인사')
+                                while idx != -1:
+                                    context = html[max(0, idx-200):idx+50]
+                                    # 시간 패턴 찾기
+                                    time_match = re.search(r'(\d{1,2}:\d{2})', context)
+                                    if time_match and 'GV|' not in context and '|중계' not in context:
+                                        start_time = time_match.group(1)
+                                        print(f"    [HTML] 무대인사 발견: {start_time}")
 
-                                    g = {
-                                        "movie": movie_name,
-                                        "theater": f"CGV {theater}",
-                                        "date": f"{date_str} ({weekday})",
-                                        "time": start_time,
-                                        "hall": hall,
-                                        "id": f"{movie_name}_{theater}_{today.day}_{start_time}"
-                                    }
-                                    if g["id"] not in [x["id"] for x in all_greetings]:
-                                        all_greetings.append(g)
-                                        print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall})")
+                                        g = {
+                                            "movie": movie_name,
+                                            "theater": f"CGV {theater}",
+                                            "date": f"{date_str} ({weekday})",
+                                            "time": start_time,
+                                            "hall": "",
+                                            "id": f"{movie_name}_{theater}_{today.day}_{start_time}"
+                                        }
+                                        if g["id"] not in [x["id"] for x in all_greetings]:
+                                            all_greetings.append(g)
+                                            print(f"    ★ 무대인사: {g['date']} {g['time']}")
+
+                                    idx = html.find('무대인사', idx + 1)
 
                             page.keyboard.press("Escape")
                             page.wait_for_timeout(1000)
