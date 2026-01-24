@@ -147,55 +147,38 @@ def check_stage_greetings():
                             page.wait_for_timeout(3000)
                             print(f"  {theater} 극장")
 
-                            # 주말 날짜 확인 - button 또는 클릭 가능한 요소 찾기
-                            # 먼저 현재 페이지에서 무대인사가 있는지 바로 확인
+                            # 현재 페이지에서 무대인사 직접 파싱
                             body_text = page.inner_text("body")
                             if "무대인사" in body_text:
-                                print(f"    → 무대인사 텍스트 발견!")
+                                body_lines = body_text.split('\n')
+                                hall = ""
+                                today = datetime.now()
+                                date_str = f"{today.month}월 {today.day}일"
+                                weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
 
-                            # 날짜 버튼 찾기 (button, div, span 등)
-                            date_elements = page.query_selector_all("button, [role='button'], .date-item, [class*='date']")
-                            print(f"    날짜 요소 {len(date_elements)}개")
-
-                            for btn in date_elements:
-                                try:
-                                    btn_text = btn.inner_text()
-                                    has_weekend = "토" in btn_text or "일" in btn_text
-                                    date_match = re.search(r'(\d{1,2})', btn_text)
-                                    if has_weekend and date_match:
-                                        print(f"    주말 날짜 발견: {btn_text.replace(chr(10), ' ')}")
-                                        date_num = date_match
-                                        btn.click(force=True)
-                                        page.wait_for_timeout(2500)
-
-                                        body_text = page.inner_text("body")
-                                        if "무대인사" in body_text:
-                                            body_lines = body_text.split('\n')
-                                            hall = ""
-                                            for i, line in enumerate(body_lines):
-                                                line = line.strip()
-                                                if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
-                                                    hall = line[:30]
-                                                if line == "무대인사":
-                                                    for j in range(max(0, i-6), i):
-                                                        time_m = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
-                                                        if time_m:
-                                                            day = "토" if "토" in btn_text else "일"
-                                                            month = datetime.now().month
-                                                            g = {
-                                                                "movie": movie_name,
-                                                                "theater": f"CGV {theater}",
-                                                                "date": f"{month}월 {date_num.group(1)}일 ({day})",
-                                                                "time": time_m.group(1),
-                                                                "hall": hall,
-                                                                "id": f"{movie_name}_{theater}_{date_num.group(1)}_{time_m.group(1)}"
-                                                            }
-                                                            if g["id"] not in [x["id"] for x in all_greetings]:
-                                                                all_greetings.append(g)
-                                                                print(f"    ★ 무대인사: {g['date']} {g['time']}")
-                                                            break
-                                except:
-                                    continue
+                                for i, line in enumerate(body_lines):
+                                    line = line.strip()
+                                    # 상영관 정보 저장
+                                    if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
+                                        hall = line[:30]
+                                    # 무대인사 발견
+                                    if line == "무대인사":
+                                        # 무대인사 위 몇 줄에서 시간 찾기
+                                        for j in range(max(0, i-6), i):
+                                            time_m = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
+                                            if time_m:
+                                                g = {
+                                                    "movie": movie_name,
+                                                    "theater": f"CGV {theater}",
+                                                    "date": f"{date_str} ({weekday})",
+                                                    "time": time_m.group(1),
+                                                    "hall": hall,
+                                                    "id": f"{movie_name}_{theater}_{today.day}_{time_m.group(1)}"
+                                                }
+                                                if g["id"] not in [x["id"] for x in all_greetings]:
+                                                    all_greetings.append(g)
+                                                    print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall})")
+                                                break
 
                             page.keyboard.press("Escape")
                             page.wait_for_timeout(1000)
