@@ -147,62 +147,40 @@ def check_stage_greetings():
                             page.wait_for_timeout(3000)
                             print(f"  {theater} 극장")
 
-                            # "무대인사" 필터 버튼 클릭하여 무대인사 상영만 표시
-                            try:
-                                # 필터 메뉴에서 무대인사 버튼 찾기
-                                filter_btns = page.query_selector_all("button")
-                                for fb in filter_btns:
-                                    if fb.inner_text().strip() == "무대인사":
-                                        fb.click(force=True)
-                                        page.wait_for_timeout(2000)
-                                        print(f"    무대인사 필터 적용")
-                                        break
-                            except:
-                                pass
-
-                            # 필터 적용 후 상영 시간 파싱 (필터 적용 시 모든 표시된 상영이 무대인사)
+                            # 상영 시간표에서 무대인사 파싱
                             body_text = page.inner_text("body")
-
-                            # 디버그: 시간 패턴 찾기
-                            time_patterns = re.findall(r'\d{1,2}:\d{2}-\d{1,2}:\d{2}', body_text)
-                            if time_patterns:
-                                print(f"    [DEBUG] 시간 패턴 {len(time_patterns)}개: {time_patterns[:3]}")
-                            body_lines = [l.strip() for l in body_text.split('\n')]
-                            hall = ""
                             today = datetime.now()
                             date_str = f"{today.month}월 {today.day}일"
                             weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
-                            found_times = []
 
-                            for i, line in enumerate(body_lines):
-                                # 상영관 정보 저장
-                                if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
-                                    hall = line[:40]
-                                # 시간 정보 (17:40-19:40 형태로 시작하는 줄)
-                                time_m = re.search(r'^(\d{1,2}:\d{2})-\d{1,2}:\d{2}', line)
-                                if time_m:
-                                    start_time = time_m.group(1)
-                                    # 다음 몇 줄에서 "무대인사" 확인
-                                    has_stage = False
-                                    for j in range(i, min(i+5, len(body_lines))):
-                                        if body_lines[j] == "무대인사":
-                                            has_stage = True
-                                            break
-                                    if has_stage:
-                                        found_times.append((start_time, hall))
+                            # 정규식으로 "시간-시간" 다음에 "무대인사"가 오는 패턴 찾기
+                            # 예: "17:40-19:40\n5/170석\n무대인사"
+                            pattern = r'(\d{1,2}:\d{2})-\d{1,2}:\d{2}[^\n]*\n[^\n]*\n무대인사'
+                            matches = re.findall(pattern, body_text)
 
-                            for start_time, hall_name in found_times:
-                                g = {
-                                    "movie": movie_name,
-                                    "theater": f"CGV {theater}",
-                                    "date": f"{date_str} ({weekday})",
-                                    "time": start_time,
-                                    "hall": hall_name,
-                                    "id": f"{movie_name}_{theater}_{today.day}_{start_time}"
-                                }
-                                if g["id"] not in [x["id"] for x in all_greetings]:
-                                    all_greetings.append(g)
-                                    print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall_name})")
+                            if matches:
+                                print(f"    [발견] 무대인사 시간: {matches}")
+                                # 상영관 정보 찾기
+                                for start_time in matches:
+                                    idx = body_text.find(f"{start_time}-")
+                                    hall = ""
+                                    if idx > 0:
+                                        prev_text = body_text[max(0, idx-300):idx]
+                                        hall_m = re.findall(r'(\d+관[^\n]*)', prev_text)
+                                        if hall_m:
+                                            hall = hall_m[-1][:40]
+
+                                    g = {
+                                        "movie": movie_name,
+                                        "theater": f"CGV {theater}",
+                                        "date": f"{date_str} ({weekday})",
+                                        "time": start_time,
+                                        "hall": hall,
+                                        "id": f"{movie_name}_{theater}_{today.day}_{start_time}"
+                                    }
+                                    if g["id"] not in [x["id"] for x in all_greetings]:
+                                        all_greetings.append(g)
+                                        print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall})")
 
                             page.keyboard.press("Escape")
                             page.wait_for_timeout(1000)
