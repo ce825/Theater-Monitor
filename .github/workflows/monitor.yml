@@ -1,0 +1,43 @@
+name: CGV Stage Greeting Monitor
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # 30분마다
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 playwright playwright-stealth
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: stage_greetings.json
+          key: cgv-greetings-${{ github.run_id }}
+          restore-keys: cgv-greetings-
+
+      - name: Run monitor
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python monitor_actions.py
+
+      - name: Save cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: stage_greetings.json
+          key: cgv-greetings-${{ github.run_id }}
