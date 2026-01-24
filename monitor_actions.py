@@ -14,7 +14,7 @@ from playwright_stealth import Stealth
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DATA_FILE = "stage_greetings.json"
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
-TARGET_REGIONS = ["서울", "경기", "인천"]
+TARGET_THEATERS = ["용산아이파크몰", "영등포", "강남", "강변", "건대입구", "왕십리"]
 
 
 def load_saved_data():
@@ -123,7 +123,7 @@ def check_stage_greetings():
                     movie_img.click(force=True)
                     page.wait_for_timeout(4000)
 
-                    for region in TARGET_REGIONS:
+                    for theater in TARGET_THEATERS:
                         try:
                             # 극장 선택 팝업 열기
                             try:
@@ -135,81 +135,56 @@ def check_stage_greetings():
                                     pass
                             page.wait_for_timeout(2000)
 
-                            # 지역 클릭
+                            # 서울 지역 클릭 (모든 타겟 극장이 서울에 있음)
                             try:
-                                page.click(f"text=/{region}\\(\\d+\\)/", force=True, timeout=3000)
+                                page.click("text=/서울\\(\\d+\\)/", force=True, timeout=3000)
                             except:
-                                page.click(f"text={region}", force=True, timeout=3000)
+                                page.click("text=서울", force=True, timeout=3000)
                             page.wait_for_timeout(2000)
-                            print(f"  {region} 지역 선택")
 
-                            # 극장 목록 - 팝업 내 li 요소에서 추출
-                            theater_items = page.query_selector_all("li")
-                            theaters = []
-                            exclude_words = ["전체", "특별관", "지역", "서울", "경기", "인천", "강원",
-                                           "대전", "대구", "부산", "경상", "광주", "충청", "전라", "제주",
-                                           "바로가기", "씨네톡", "예매", "매점", "메뉴", "로그인", "회원",
-                                           "영화", "이벤트", "스토어", "포토", "예약", "고객센터",
-                                           "더보기", "찾기", "닫기", "확인", "취소", "본문", "주요"]
-                            for li in theater_items:
+                            # 극장 클릭
+                            page.click(f"text={theater}", force=True, timeout=2000)
+                            page.wait_for_timeout(3000)
+                            print(f"  {theater} 극장")
+
+                            # 주말 날짜 확인
+                            buttons = page.query_selector_all("button")
+                            for btn in buttons:
                                 try:
-                                    li_text = li.inner_text().strip()
-                                    # 단일 줄이고, 2-15자 사이인 극장명
-                                    if '\n' not in li_text and 2 <= len(li_text) <= 15:
-                                        if not any(x in li_text for x in exclude_words):
-                                            if not re.search(r'\(\d+\)', li_text):
-                                                theaters.append(li_text)
-                                except:
-                                    continue
-                            theaters = list(dict.fromkeys(theaters))[:20]  # 더 많은 극장 확인
+                                    btn_text = btn.inner_text()
+                                    has_weekend = "토" in btn_text or "일" in btn_text
+                                    date_match = re.search(r'(\d{1,2})', btn_text)
+                                    if has_weekend and date_match:
+                                        date_num = date_match
+                                        btn.click(force=True)
+                                        page.wait_for_timeout(2500)
 
-                            for theater in theaters:
-                                try:
-                                    page.click(f"text={theater}", force=True, timeout=2000)
-                                    page.wait_for_timeout(3000)
-                                    print(f"    {theater} 극장")
-
-                                    # 주말 날짜 확인 (버튼 텍스트가 "일\n25" 또는 "토\n26" 형태)
-                                    buttons = page.query_selector_all("button")
-                                    for btn in buttons:
-                                        try:
-                                            btn_text = btn.inner_text()  # strip 하지 않고 원본 유지
-                                            # 토 또는 일이 포함되고 숫자가 있는 버튼
-                                            has_weekend = "토" in btn_text or "일" in btn_text
-                                            date_match = re.search(r'(\d{1,2})', btn_text)
-                                            if has_weekend and date_match:
-                                                date_num = date_match
-                                                btn.click(force=True)
-                                                page.wait_for_timeout(2500)
-
-                                                body_text = page.inner_text("body")
-                                                if "무대인사" in body_text:
-                                                    body_lines = body_text.split('\n')
-                                                    hall = ""
-                                                    for i, line in enumerate(body_lines):
-                                                        line = line.strip()
-                                                        if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
-                                                            hall = line[:30]
-                                                        if line == "무대인사":
-                                                            for j in range(max(0, i-6), i):
-                                                                time_m = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
-                                                                if time_m:
-                                                                    day = "토" if "토" in btn_text else "일"
-                                                                    month = datetime.now().month
-                                                                    g = {
-                                                                        "movie": movie_name,
-                                                                        "theater": f"CGV {theater}",
-                                                                        "date": f"{month}월 {date_num.group(1)}일 ({day})",
-                                                                        "time": time_m.group(1),
-                                                                        "hall": hall,
-                                                                        "id": f"{movie_name}_{theater}_{date_num.group(1)}_{time_m.group(1)}"
-                                                                    }
-                                                                    if g["id"] not in [x["id"] for x in all_greetings]:
-                                                                        all_greetings.append(g)
-                                                                        print(f"      ★ 무대인사: {g['date']} {g['time']}")
-                                                                    break
-                                        except:
-                                            continue
+                                        body_text = page.inner_text("body")
+                                        if "무대인사" in body_text:
+                                            body_lines = body_text.split('\n')
+                                            hall = ""
+                                            for i, line in enumerate(body_lines):
+                                                line = line.strip()
+                                                if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
+                                                    hall = line[:30]
+                                                if line == "무대인사":
+                                                    for j in range(max(0, i-6), i):
+                                                        time_m = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
+                                                        if time_m:
+                                                            day = "토" if "토" in btn_text else "일"
+                                                            month = datetime.now().month
+                                                            g = {
+                                                                "movie": movie_name,
+                                                                "theater": f"CGV {theater}",
+                                                                "date": f"{month}월 {date_num.group(1)}일 ({day})",
+                                                                "time": time_m.group(1),
+                                                                "hall": hall,
+                                                                "id": f"{movie_name}_{theater}_{date_num.group(1)}_{time_m.group(1)}"
+                                                            }
+                                                            if g["id"] not in [x["id"] for x in all_greetings]:
+                                                                all_greetings.append(g)
+                                                                print(f"    ★ 무대인사: {g['date']} {g['time']}")
+                                                            break
                                 except:
                                     continue
 
