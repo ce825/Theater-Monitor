@@ -153,6 +153,13 @@ def check_stage_greetings():
                             date_str = f"{today.month}월 {today.day}일"
                             weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
 
+                            # 디버그: 페이지에 무대인사가 있는지 확인
+                            if "무대인사" in body_text:
+                                # 무대인사 주변 컨텍스트 출력 (각 위치)
+                                for idx in [m.start() for m in re.finditer(r'무대인사', body_text)][:2]:
+                                    context = body_text[max(0, idx-100):idx+20].replace('\n', '|')
+                                    print(f"    [DEBUG] 무대인사 컨텍스트: {context}")
+
                             # 정규식으로 "시간-시간" 다음에 "무대인사"가 오는 패턴 찾기
                             # 예: "17:40-19:40\n5/170석\n무대인사"
                             pattern = r'(\d{1,2}:\d{2})-\d{1,2}:\d{2}[^\n]*\n[^\n]*\n무대인사'
