@@ -4,3 +4,50 @@
 [2026-01-25 00:01:30.921230] CGV 주말 무대인사 모니터링 시작...
 [2026-01-25 00:01:35.238570] 브라우저 오류: Page.wait_for_timeout: Target page, context or browser has been closed
 [2026-01-25 00:01:35.238583] 조회 실패
+
+<--- Last few GCs --->
+
+[8838:0x138008000]   994794 ms: Scavenge 2029.3 (2046.5) -> 2023.9 (2063.2) MB, pooled: 0 MB, 24.04 / 0.00 ms  (average mu = 0.335, current mu = 0.328) allocation failure; 
+[8838:0x138008000]   995764 ms: Mark-Compact (reduce) 2033.0 (2063.5) -> 2015.0 (2031.5) MB, pooled: 0 MB, 15.83 / 0.00 ms  (+ 869.8 ms in 147 steps since start of marking, biggest step 15.9 ms, walltime since start of marking 970 ms) (average mu = 0.393,
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x10044b848 node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 2: 0x10064aa14 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 3: 0x1008a8e24 v8::internal::Heap::stack() [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 4: 0x1008ac1f8 v8::internal::Heap::HasLowYoungGenerationAllocationRate() [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 5: 0x1008bd414 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1::operator()() const [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 6: 0x1008bcce8 void heap::base::Stack::SetMarkerAndCallbackImpl<v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1>(heap::base::Stack*, void*, void const*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 7: 0x1012722e4 PushAllRegistersAndIterateStack [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 8: 0x1008a6b28 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+ 9: 0x10081e7ac v8::internal::StackGuard::HandleInterrupts(v8::internal::StackGuard::InterruptLevel) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+10: 0x100d0b76c v8::internal::Runtime_StackGuard(int, unsigned long*, v8::internal::Isolate*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+11: 0x101361f74 Builtins_CEntry_Return1_ArgvOnStack_NoBuiltinExit [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+12: 0x101329a20 Builtins_MapPrototypeSet [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+13: 0x11f9e5088 
+14: 0x11fa1eb90 
+15: 0x1013035a4 Builtins_AsyncFunctionAwaitRejectClosure [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+16: 0x1013d8758 Builtins_PromiseRejectReactionJob [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+17: 0x1012f2b04 Builtins_RunMicrotasks [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+18: 0x1012c27b0 Builtins_JSRunMicrotasksEntry [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+19: 0x1007ed15c v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+20: 0x1007ed9d0 v8::internal::(anonymous namespace)::InvokeWithTryCatch(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+21: 0x1007edb0c v8::internal::Execution::TryRunMicrotasks(v8::internal::Isolate*, v8::internal::MicrotaskQueue*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+22: 0x10081ca10 v8::internal::MicrotaskQueue::RunMicrotasks(v8::internal::Isolate*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+23: 0x10081d370 v8::internal::MicrotaskQueue::PerformCheckpoint(v8::Isolate*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+24: 0x1012c694c Builtins_CallApiCallbackOptimizedNoProfiling [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+25: 0x11fa18f9c 
+26: 0x1012c28cc Builtins_JSEntryTrampoline [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+27: 0x1012c2570 Builtins_JSEntry [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+28: 0x1007ed1a4 v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+29: 0x1007ecb08 v8::internal::Execution::Call(v8::internal::Isolate*, v8::internal::DirectHandle<v8::internal::Object>, v8::internal::DirectHandle<v8::internal::Object>, v8::base::Vector<v8::internal::DirectHandle<v8::internal::Object> const>) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+30: 0x10066298c v8::Function::Call(v8::Isolate*, v8::Local<v8::Context>, v8::Local<v8::Value>, int, v8::Local<v8::Value>*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+31: 0x10034d36c node::InternalMakeCallback(node::Environment*, v8::Local<v8::Object>, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+32: 0x10034d654 node::InternalMakeCallback(v8::Isolate*, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+33: 0x1003d73e4 node::Environment::CheckImmediate(uv_check_s*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+34: 0x1012a904c uv__run_check [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+35: 0x1012a206c uv_run [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+36: 0x10034db7c node::SpinEventLoopInternal(node::Environment*) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+37: 0x10049f744 node::NodeMainInstance::Run() [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+38: 0x1004058a8 node::Start(int, char**) [/Users/cehwang/miniconda3/lib/python3.13/site-packages/playwright/driver/node]
+39: 0x19cc220e0 start [/usr/lib/dyld]
