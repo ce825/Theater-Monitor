@@ -33,6 +33,7 @@ jobs:
       - name: Run monitor
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TEST_NOTIFICATION: "true"
         run: python monitor_actions.py
 
       - name: Save cache

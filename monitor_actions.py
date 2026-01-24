@@ -265,6 +265,18 @@ def main():
     else:
         print("새 무대인사 없음")
 
+    # 테스트 알림 (테스트 후 삭제)
+    if os.environ.get("TEST_NOTIFICATION"):
+        test_greeting = {
+            "movie": "테스트 영화 (실제 알림 테스트)",
+            "theater": "CGV 용산아이파크몰",
+            "date": "1월 26일 (일)",
+            "time": "15:00",
+            "hall": "IMAX관"
+        }
+        send_discord_notification(test_greeting)
+        print("테스트 알림 전송 완료")
+
 
 if __name__ == "__main__":
     main()
