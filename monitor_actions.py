@@ -149,42 +149,36 @@ def check_stage_greetings():
 
                             # 현재 페이지에서 무대인사 직접 파싱
                             body_text = page.inner_text("body")
+                            body_lines = [l.strip() for l in body_text.split('\n')]
+                            hall = ""
+                            today = datetime.now()
+                            date_str = f"{today.month}월 {today.day}일"
+                            weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
+                            last_time = None
+                            last_time_idx = -100
 
-                            # 디버그: 무대인사 주변 텍스트 출력
-                            if "무대인사" in body_text:
-                                idx = body_text.find("무대인사")
-                                context = body_text[max(0,idx-200):idx+50].replace('\n', '|')
-                                print(f"    [DEBUG] 무대인사 컨텍스트: ...{context}...")
-
-                            if "무대인사" in body_text:
-                                body_lines = [l.strip() for l in body_text.split('\n')]
-                                hall = ""
-                                today = datetime.now()
-                                date_str = f"{today.month}월 {today.day}일"
-                                weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
-                                last_time = None
-
-                                for i, line in enumerate(body_lines):
-                                    # 상영관 정보 저장
-                                    if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
-                                        hall = line[:30]
-                                    # 시간 정보 저장 (17:40 형태)
-                                    time_m = re.search(r'^(\d{1,2}:\d{2})', line)
-                                    if time_m:
-                                        last_time = time_m.group(1)
-                                    # 무대인사 발견 - 바로 앞에 저장된 시간 사용
-                                    if line == "무대인사" and last_time:
-                                        g = {
-                                            "movie": movie_name,
-                                            "theater": f"CGV {theater}",
-                                            "date": f"{date_str} ({weekday})",
-                                            "time": last_time,
-                                            "hall": hall,
-                                            "id": f"{movie_name}_{theater}_{today.day}_{last_time}"
-                                        }
-                                        if g["id"] not in [x["id"] for x in all_greetings]:
-                                            all_greetings.append(g)
-                                            print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall})")
+                            for i, line in enumerate(body_lines):
+                                # 상영관 정보 저장 (예: 14관[SCREENX] (Laser))
+                                if re.search(r'\d+관|IMAX|Laser|SCREENX', line):
+                                    hall = line[:40]
+                                # 시간 정보 저장 (17:40 또는 17:40-19:40 형태)
+                                time_m = re.search(r'^(\d{1,2}:\d{2})', line)
+                                if time_m:
+                                    last_time = time_m.group(1)
+                                    last_time_idx = i
+                                # 무대인사 발견 - 시간과 가까운 위치에 있을 때만 (5줄 이내)
+                                if line == "무대인사" and last_time and (i - last_time_idx) <= 5:
+                                    g = {
+                                        "movie": movie_name,
+                                        "theater": f"CGV {theater}",
+                                        "date": f"{date_str} ({weekday})",
+                                        "time": last_time,
+                                        "hall": hall,
+                                        "id": f"{movie_name}_{theater}_{today.day}_{last_time}"
+                                    }
+                                    if g["id"] not in [x["id"] for x in all_greetings]:
+                                        all_greetings.append(g)
+                                        print(f"    ★ 무대인사: {g['date']} {g['time']} ({hall})")
 
                             page.keyboard.press("Escape")
                             page.wait_for_timeout(1000)
