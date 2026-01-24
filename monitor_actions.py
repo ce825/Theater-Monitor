@@ -34,18 +34,23 @@ def send_discord_notification(greeting):
         print("Discord webhook URL not set")
         return
 
+    fields = [
+        {"name": "영화", "value": greeting['movie'], "inline": False},
+        {"name": "📍 극장", "value": greeting.get("theater", "미정"), "inline": True},
+        {"name": "🎥 상영관", "value": greeting.get("hall", "미정") or "미정", "inline": True},
+        {"name": "\u200b", "value": "\u200b", "inline": True},
+        {"name": "📅 날짜", "value": greeting.get("date", "미정"), "inline": True},
+        {"name": "⏰ 시간", "value": greeting.get("time", "미정"), "inline": True},
+        {"name": "\u200b", "value": "\u200b", "inline": True},
+    ]
+
     embed = {
         "embeds": [{
-            "title": "🎬 CGV 무대인사 발견!",
-            "description": f"**{greeting['movie']}**",
+            "title": "🎬 새로운 무대인사가 등록되었습니다!",
             "url": CGV_URL,
-            "color": 0xFF5733,
-            "fields": [
-                {"name": "극장", "value": greeting.get("theater", "미정"), "inline": True},
-                {"name": "날짜", "value": greeting.get("date", "미정"), "inline": True},
-                {"name": "시간", "value": greeting.get("time", "미정"), "inline": True},
-            ],
-            "footer": {"text": "CGV 무대인사"},
+            "color": 5814783,
+            "fields": fields,
+            "footer": {"text": "CGV 무대인사 알림"},
             "timestamp": datetime.utcnow().isoformat()
         }]
     }
