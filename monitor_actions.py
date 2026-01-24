@@ -149,8 +149,8 @@ def check_stage_greetings():
                             exclude_words = ["전체", "특별관", "지역", "서울", "경기", "인천", "강원",
                                            "대전", "대구", "부산", "경상", "광주", "충청", "전라", "제주",
                                            "바로가기", "씨네톡", "예매", "매점", "메뉴", "로그인", "회원",
-                                           "극장", "영화", "이벤트", "스토어", "포토", "예약", "고객센터",
-                                           "더보기", "상영관", "찾기", "닫기", "선택", "확인", "취소"]
+                                           "영화", "이벤트", "스토어", "포토", "예약", "고객센터",
+                                           "더보기", "찾기", "닫기", "확인", "취소", "본문", "주요"]
                             for li in theater_items:
                                 try:
                                     li_text = li.inner_text().strip()
@@ -161,7 +161,7 @@ def check_stage_greetings():
                                                 theaters.append(li_text)
                                 except:
                                     continue
-                            theaters = list(dict.fromkeys(theaters))[:8]
+                            theaters = list(dict.fromkeys(theaters))[:20]  # 더 많은 극장 확인
 
                             for theater in theaters:
                                 try:
@@ -169,14 +169,16 @@ def check_stage_greetings():
                                     page.wait_for_timeout(3000)
                                     print(f"    {theater} 극장")
 
-                                    # 주말 날짜 확인
+                                    # 주말 날짜 확인 (버튼 텍스트가 "일\n25" 또는 "토\n26" 형태)
                                     buttons = page.query_selector_all("button")
                                     for btn in buttons:
                                         try:
-                                            btn_text = btn.inner_text().strip()
-                                            if ("토" in btn_text or "일" in btn_text) and re.search(r'\d{1,2}', btn_text):
-                                                date_num = re.search(r'(\d{1,2})', btn_text)
-                                                if date_num:
+                                            btn_text = btn.inner_text()  # strip 하지 않고 원본 유지
+                                            # 토 또는 일이 포함되고 숫자가 있는 버튼
+                                            has_weekend = "토" in btn_text or "일" in btn_text
+                                            date_match = re.search(r'(\d{1,2})', btn_text)
+                                            if has_weekend and date_match:
+                                                date_num = date_match
                                                     btn.click(force=True)
                                                     page.wait_for_timeout(2500)
 
@@ -193,10 +195,11 @@ def check_stage_greetings():
                                                                     time_m = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
                                                                     if time_m:
                                                                         day = "토" if "토" in btn_text else "일"
+                                                                        month = datetime.now().month
                                                                         g = {
                                                                             "movie": movie_name,
                                                                             "theater": f"CGV {theater}",
-                                                                            "date": f"{date_num.group(1)}일({day})",
+                                                                            "date": f"{month}월 {date_num.group(1)}일 ({day})",
                                                                             "time": time_m.group(1),
                                                                             "hall": hall,
                                                                             "id": f"{movie_name}_{theater}_{date_num.group(1)}_{time_m.group(1)}"
@@ -264,18 +267,6 @@ def main():
         save_data(saved_data)
     else:
         print("새 무대인사 없음")
-
-    # 테스트 알림 (테스트 후 삭제)
-    if os.environ.get("TEST_NOTIFICATION"):
-        test_greeting = {
-            "movie": "테스트 영화 (실제 알림 테스트)",
-            "theater": "CGV 용산아이파크몰",
-            "date": "1월 26일 (일)",
-            "time": "15:00",
-            "hall": "IMAX관"
-        }
-        send_discord_notification(test_greeting)
-        print("테스트 알림 전송 완료")
 
 
 if __name__ == "__main__":
