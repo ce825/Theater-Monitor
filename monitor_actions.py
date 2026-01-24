@@ -152,11 +152,10 @@ def check_stage_greetings():
                             date_str = f"{today.month}월 {today.day}일"
                             weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
 
-                            # 페이지 스크린샷 디버그용 (첫 번째 극장만)
-                            if theater == "용산아이파크몰" and movie_name == "신의악단":
-                                # HTML 일부 저장
-                                html_sample = page.content()[:5000]
-                                print(f"    [HTML 샘플] {html_sample[:500]}...")
+                            # 페이지 스크린샷 저장 (신의악단 + 용산만)
+                            if "신의악단" in movie_name and theater == "용산아이파크몰":
+                                page.screenshot(path="debug_screenshot.png", full_page=True)
+                                print(f"    [스크린샷 저장됨]")
 
                             # 상영 시간 블록 찾기 - 시간 포맷으로 찾기
                             all_buttons = page.query_selector_all("button, a, div")
