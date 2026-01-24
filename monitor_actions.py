@@ -147,6 +147,19 @@ def check_stage_greetings():
                             page.wait_for_timeout(3000)
                             print(f"  {theater} 극장")
 
+                            # "무대인사" 필터 버튼 클릭하여 무대인사 상영만 표시
+                            try:
+                                # 필터 메뉴에서 무대인사 버튼 찾기
+                                filter_btns = page.query_selector_all("button")
+                                for fb in filter_btns:
+                                    if fb.inner_text().strip() == "무대인사":
+                                        fb.click(force=True)
+                                        page.wait_for_timeout(2000)
+                                        print(f"    무대인사 필터 적용")
+                                        break
+                            except:
+                                pass
+
                             # 현재 페이지에서 무대인사 직접 파싱
                             body_text = page.inner_text("body")
                             body_lines = [l.strip() for l in body_text.split('\n')]
