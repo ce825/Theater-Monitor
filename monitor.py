@@ -42,8 +42,11 @@ def save_data(data):
 
 def send_discord_notification(greeting):
     from datetime import timezone
+    event_type = greeting.get("event_type", "무대인사")
+
     fields = [
         {"name": "🎬 영화", "value": greeting.get("movie", "미정"), "inline": False},
+        {"name": "🎫 이벤트", "value": event_type, "inline": True},
         {"name": "📍 극장", "value": greeting.get("theater", "미정"), "inline": True},
         {"name": "📅 날짜", "value": greeting.get("date", "미정"), "inline": True},
         {"name": "⏰ 시간", "value": greeting.get("time", "미정"), "inline": True},
@@ -53,11 +56,11 @@ def send_discord_notification(greeting):
 
     embed = {
         "embeds": [{
-            "title": "새로운 상영 이벤트가 등록되었습니다!",
+            "title": f"새로운 {event_type} 일정이 등록되었습니다!",
             "url": CGV_URL,
             "color": 5814783,
             "fields": fields,
-            "footer": {"text": "CGV 무대인사/GV/시네마톡 알림"},
+            "footer": {"text": f"CGV {event_type} 알림"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }]
     }
@@ -361,13 +364,15 @@ def check_stage_greetings():
 
                                         # 중복 체크
                                         if greeting_id not in [x["id"] for x in all_greetings]:
-                                            print(f"    - {movie_final} {time_str}")
+                                            event_type_str = "/".join(found_events)
+                                            print(f"    - [{event_type_str}] {movie_final} {time_str}")
                                             g = {
                                                 "movie": movie_final,
                                                 "theater": f"CGV {theater}",
                                                 "date": date_str,
                                                 "time": time_str,
                                                 "hall": "",
+                                                "event_type": event_type_str,
                                                 "id": greeting_id
                                             }
                                             all_greetings.append(g)
