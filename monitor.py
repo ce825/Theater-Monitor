@@ -54,11 +54,11 @@ def send_discord_notification(greeting):
 
     embed = {
         "embeds": [{
-            "title": "🎬 새로운 무대인사가 등록되었습니다!",
+            "title": "🎬 새로운 상영 이벤트가 등록되었습니다!",
             "url": CGV_URL,
             "color": 5814783,
             "fields": fields,
-            "footer": {"text": "CGV 무대인사 알림"},
+            "footer": {"text": "CGV 무대인사/GV/시네마톡 알림"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }]
     }
@@ -272,11 +272,13 @@ def check_stage_greetings():
                                 }""")
                                 page.wait_for_timeout(1000)
 
-                                # 무대인사 확인
+                                # 무대인사/GV/시네마톡 확인
                                 body = page.inner_text("body")
+                                event_keywords = ["무대인사", "GV", "시네마톡"]
+                                found_events = [kw for kw in event_keywords if kw in body]
 
-                                if "무대인사" in body:
-                                    print(f"  ★ {day}요일 {date_num}일 무대인사 발견!")
+                                if found_events:
+                                    print(f"  ★ {day}요일 {date_num}일 이벤트 발견: {', '.join(found_events)}")
 
                                     # 날짜 계산: 현재 날짜 기준으로 해당 일자의 실제 월 계산
                                     today = datetime.now()
@@ -300,7 +302,7 @@ def check_stage_greetings():
 
                                     # 시간 및 영화 제목 추출
                                     lines = body.split('\n')
-                                    exclude_words = ["무대인사", "GV", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표", "예매종료", "매진", "영화순", "시간순", "극장별 예매", "영화별예매"]
+                                    exclude_words = ["무대인사", "GV", "시네마톡", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표", "예매종료", "매진", "영화순", "시간순", "극장별 예매", "영화별예매"]
                                     hall_patterns = r'(DOLBY|ATMOS|SCREENX|SOUNDX|4DX|IMAX|SPHERE|Laser|리클라이너|아트하우스|\d+관|2D|3D|전도연관|씨네앤포레|씨네\&포레|CINE|MX관|GOLD CLASS|SUITE CINEMA|PREMIUM|TEMPUR|STARIUM|CGV|특별관|일반|조조)'
 
                                     movie_candidates = []
@@ -313,12 +315,12 @@ def check_stage_greetings():
                                                         if not re.search(hall_patterns, text, re.IGNORECASE):
                                                             movie_candidates.append((idx, text))
 
-                                    # 무대인사가 포함된 모든 줄 찾기 (정확히 일치 또는 포함)
+                                    # 무대인사/GV/시네마톡이 포함된 모든 줄 찾기
                                     found_times = set()
                                     for i, line in enumerate(lines):
                                         line_stripped = line.strip()
-                                        # "무대인사"가 포함된 줄 찾기
-                                        if "무대인사" in line_stripped:
+                                        # 이벤트 키워드가 포함된 줄 찾기
+                                        if any(kw in line_stripped for kw in event_keywords):
                                             # 같은 줄에서 시간 찾기
                                             tm_same = re.search(r'(\d{1,2}:\d{2})', line_stripped)
                                             if tm_same:
@@ -349,7 +351,7 @@ def check_stage_greetings():
                                             if abs(closest[0] - line_idx) < 50:
                                                 movie_name = closest[1]
 
-                                        movie_final = movie_name if movie_name else "무대인사"
+                                        movie_final = movie_name if movie_name else found_events[0]
                                         greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_final[:10]}"
 
                                         # 중복 체크
@@ -365,7 +367,7 @@ def check_stage_greetings():
                                             }
                                             all_greetings.append(g)
                                 else:
-                                    print(f"  {day}요일 {date_num}일 무대인사 없음")
+                                    print(f"  {day}요일 {date_num}일 이벤트 없음")
                             except Exception as e:
                                 print(f"  {day}요일 {date_num}일 오류: {e}")
 
