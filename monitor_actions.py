@@ -7,14 +7,24 @@ import json
 import os
 import re
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DATA_FILE = "stage_greetings.json"
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
-TARGET_THEATERS = ["용산아이파크몰", "영등포", "강남", "강변", "건대입구", "왕십리"]
+
+# 타겟 극장 리스트: (지역, 극장명)
+TARGET_THEATERS = [
+    ("서울", "용산아이파크몰"),
+    ("서울", "강남"),
+    ("서울", "영등포"),
+    ("서울", "왕십리"),
+    ("서울", "건대입구"),
+    ("서울", "강변"),
+    ("서울", "여의도"),
+]
 
 
 def load_saved_data():
@@ -35,14 +45,13 @@ def send_discord_notification(greeting):
         return
 
     fields = [
-        {"name": "영화", "value": greeting['movie'], "inline": False},
+        {"name": "🎬 영화", "value": greeting.get("movie", "미정"), "inline": False},
         {"name": "📍 극장", "value": greeting.get("theater", "미정"), "inline": True},
-        {"name": "🎥 상영관", "value": greeting.get("hall", "미정") or "미정", "inline": True},
-        {"name": "\u200b", "value": "\u200b", "inline": True},
         {"name": "📅 날짜", "value": greeting.get("date", "미정"), "inline": True},
         {"name": "⏰ 시간", "value": greeting.get("time", "미정"), "inline": True},
-        {"name": "\u200b", "value": "\u200b", "inline": True},
     ]
+    if greeting.get("hall"):
+        fields.append({"name": "🎥 상영관", "value": greeting["hall"], "inline": True})
 
     embed = {
         "embeds": [{
@@ -51,25 +60,24 @@ def send_discord_notification(greeting):
             "color": 5814783,
             "fields": fields,
             "footer": {"text": "CGV 무대인사 알림"},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }]
     }
 
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=10)
         if response.status_code == 204:
-            print(f"알림 전송: {greeting['movie']} - {greeting['theater']} {greeting['time']}")
+            print(f"  알림 전송: {greeting['movie']} - {greeting['theater']} {greeting['date']} {greeting['time']}")
     except Exception as e:
-        print(f"Discord 오류: {e}")
+        print(f"  Discord 오류: {e}")
 
 
 def check_stage_greetings():
-    """CGV에서 주말 무대인사 정보 수집"""
+    """CGV 타겟 극장들의 주말 무대인사 확인"""
     all_greetings = []
 
     try:
         with sync_playwright() as p:
-            # GitHub Actions에서는 headless 사용
             browser = p.chromium.launch(
                 headless=True,
                 args=[
@@ -86,127 +94,150 @@ def check_stage_greetings():
             stealth.apply_stealth_sync(context)
             page = context.new_page()
 
-            # CGV 메인 페이지
-            print("CGV 접속 중...")
-            page.goto(CGV_URL, timeout=60000)
-            page.wait_for_timeout(8000)
+            # 각 극장별로 확인
+            for region, theater in TARGET_THEATERS:
+                print(f"\n{'='*50}")
+                print(f"[{region} > {theater}] 확인 중...")
+                print('='*50)
 
-            # Cloudflare 체크
-            if "Cloudflare" in page.title() or "Attention" in page.title():
-                print("Cloudflare 차단됨 - 우회 시도...")
-                page.wait_for_timeout(5000)
-                page.reload()
-                page.wait_for_timeout(10000)
-
-            print(f"페이지 제목: {page.title()}")
-
-            # 영화 목록 가져오기
-            movie_imgs = page.query_selector_all("img[alt]")
-            movies = []
-            for img in movie_imgs:
-                alt = img.get_attribute("alt") or ""
-                if alt and alt not in ["CGV", ""] and len(alt) > 1:
-                    movies.append(alt)
-            movies = list(dict.fromkeys(movies))[:8]
-            print(f"영화 {len(movies)}개 발견")
-
-            for movie_name in movies:
                 try:
-                    print(f"\n[{movie_name}] 확인 중...")
-
-                    page.goto(CGV_URL, timeout=30000)
+                    # 1. CGV 예매 페이지 이동
+                    page.goto(CGV_URL, timeout=60000)
                     page.wait_for_timeout(5000)
 
-                    movie_img = page.query_selector(f"img[alt='{movie_name}']")
-                    if not movie_img:
-                        continue
-                    movie_img.click(force=True)
+                    # Cloudflare 체크
+                    if "Cloudflare" in page.title() or "Attention" in page.title():
+                        print("  Cloudflare 감지 - 대기 중...")
+                        page.wait_for_timeout(10000)
+
+                    # 2. 극장 선택 팝업 열기
+                    page.click("text=극장을 선택해 주세요", timeout=5000)
+                    page.wait_for_timeout(2000)
+
+                    # 3. 지역 클릭
+                    page.click(f"text=/{region}\\(\\d+\\)/", timeout=5000)
+                    page.wait_for_timeout(1500)
+
+                    # 4. 극장 클릭
+                    page.click(f"text={theater}", timeout=5000)
+                    page.wait_for_timeout(1500)
+
+                    # 5. 극장선택 버튼 클릭
+                    page.evaluate('''() => {
+                        const elements = document.querySelectorAll('button, a, div, span');
+                        for (const el of elements) {
+                            const text = (el.innerText || '').trim();
+                            if (text === '극장선택') {
+                                el.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }''')
                     page.wait_for_timeout(4000)
+                    print(f"  극장 선택 완료")
 
-                    for theater in TARGET_THEATERS:
+                    # 6. 주말 날짜 클릭 (토, 일)
+                    for day in ["토", "일"]:
                         try:
-                            # 극장 선택 팝업 열기
-                            try:
-                                page.click("text=선택 된 극장이 없습니다", force=True, timeout=3000)
-                            except:
-                                try:
-                                    page.click("text=자주가는 CGV", force=True, timeout=2000)
-                                except:
-                                    pass
-                            page.wait_for_timeout(2000)
+                            js_code = """() => {
+                                const day = '%s';
+                                const elements = document.querySelectorAll('button, li, a, div, span');
+                                for (const el of elements) {
+                                    const text = (el.innerText || '').trim();
+                                    const pattern = new RegExp('^' + day + '[\\\\s\\\\n]+\\\\d');
+                                    if (pattern.test(text)) {
+                                        el.click();
+                                        return text;
+                                    }
+                                }
+                                return false;
+                            }""" % day
+                            clicked = page.evaluate(js_code)
+                            if not clicked:
+                                continue
+                            page.wait_for_timeout(2500)
 
-                            # 서울 지역 클릭 (모든 타겟 극장이 서울에 있음)
-                            try:
-                                page.click("text=/서울\\(\\d+\\)/", force=True, timeout=3000)
-                            except:
-                                page.click("text=서울", force=True, timeout=3000)
-                            page.wait_for_timeout(2000)
+                            # 7. 무대인사 확인
+                            body = page.inner_text("body")
+                            if "무대인사" in body:
+                                print(f"  ★ {day}요일 무대인사 발견!")
+                                today = datetime.now()
+                                day_offset = 0 if day == "토" else 1
+                                days_until_sat = (5 - today.weekday()) % 7
+                                if today.weekday() == 5:
+                                    days_until_sat = 0
+                                elif today.weekday() == 6:
+                                    days_until_sat = 6
 
-                            # 극장 클릭
-                            page.click(f"text={theater}", force=True, timeout=2000)
-                            page.wait_for_timeout(3000)
-                            print(f"  {theater} 극장")
+                                target_date = today + timedelta(days=days_until_sat + day_offset)
+                                date_str = f"{target_date.month}월 {target_date.day}일 ({day})"
 
-                            # DOM에서 무대인사 상영 찾기
-                            today = datetime.now()
-                            date_str = f"{today.month}월 {today.day}일"
-                            weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
+                                # 시간 및 영화 제목 추출
+                                lines = body.split('\n')
+                                exclude_words = ["무대인사", "GV", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표"]
+                                hall_patterns = r'(DOLBY|ATMOS|SCREENX|SOUNDX|4DX|IMAX|SPHERE|Laser|리클라이너|아트하우스|\d+관|2D|3D|전도연관|씨네앤포레|씨네\&포레|CINE|MX관|GOLD CLASS|SUITE CINEMA|PREMIUM|TEMPUR|STARIUM|CGV|특별관|일반|조조)'
 
-                            # 페이지 스크린샷 저장 (신의악단 + 용산만)
-                            if "신의악단" in movie_name and theater == "용산아이파크몰":
-                                page.screenshot(path="debug_screenshot.png", full_page=True)
-                                print(f"    [스크린샷 저장됨]")
+                                # 페이지에서 영화 제목 후보들을 수집
+                                movie_candidates = []
+                                for idx, line in enumerate(lines):
+                                    text = line.strip()
+                                    if len(text) >= 2 and re.search(r'[가-힣]', text):
+                                        if not re.match(r'^[\d:~\-\(\)\[\]관]', text):
+                                            if text not in exclude_words:
+                                                if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', text):
+                                                    if not re.search(hall_patterns, text, re.IGNORECASE):
+                                                        movie_candidates.append((idx, text))
 
-                            # 상영 시간 블록 찾기 - 시간 포맷으로 찾기
-                            all_buttons = page.query_selector_all("button, a, div")
-                            for elem in all_buttons:
-                                try:
-                                    text = elem.inner_text()
-                                    # 시간 패턴이 있고 무대인사도 있는 요소
-                                    if re.search(r'\d{1,2}:\d{2}', text) and '무대인사' in text:
-                                        time_m = re.search(r'(\d{1,2}:\d{2})', text)
-                                        if time_m:
-                                            print(f"    [요소 발견] {text[:100]}")
-                                except:
-                                    continue
+                                for i, line in enumerate(lines):
+                                    line_stripped = line.strip()
+                                    if line_stripped == "무대인사":
+                                        for j in range(max(0, i-5), i):
+                                            tm = re.search(r'(\d{1,2}:\d{2})', lines[j])
+                                            if tm:
+                                                time_str = tm.group(1)
+                                                movie_name = ""
 
-                            # 상영 카드에서 무대인사 찾기
-                            cards = page.query_selector_all("[class*='schedule'], [class*='time-table'], li, article")
-                            for card in cards:
-                                try:
-                                    card_text = card.inner_text()
-                                    if '무대인사' in card_text and re.search(r'\d{1,2}:\d{2}', card_text):
-                                        # 필터 메뉴 제외 (GV|무대인사|중계 형태)
-                                        if 'GV' not in card_text and '중계' not in card_text:
-                                            time_m = re.search(r'(\d{1,2}:\d{2})', card_text)
-                                            if time_m:
-                                                start_time = time_m.group(1)
+                                                # 방법 1: 무대인사 위로 올라가며 영화 제목 찾기
+                                                for k in range(i-1, max(0, i-30), -1):
+                                                    candidate = lines[k].strip()
+                                                    if len(candidate) >= 2 and re.search(r'[가-힣]', candidate):
+                                                        if not re.match(r'^[\d:~\-\(\)\[\]관]', candidate):
+                                                            if candidate not in exclude_words:
+                                                                if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', candidate):
+                                                                    if not re.search(hall_patterns, candidate, re.IGNORECASE):
+                                                                        movie_name = candidate
+                                                                        break
+
+                                                # 방법 2: 못 찾으면 가장 가까운 영화 제목 후보 사용
+                                                if not movie_name and movie_candidates:
+                                                    closest = min(movie_candidates, key=lambda x: abs(x[0] - i))
+                                                    if abs(closest[0] - i) < 50:
+                                                        movie_name = closest[1]
+
+                                                print(f"    - {movie_name} {time_str}")
                                                 g = {
-                                                    "movie": movie_name,
+                                                    "movie": movie_name if movie_name else "무대인사",
                                                     "theater": f"CGV {theater}",
-                                                    "date": f"{date_str} ({weekday})",
-                                                    "time": start_time,
+                                                    "date": date_str,
+                                                    "time": time_str,
                                                     "hall": "",
-                                                    "id": f"{movie_name}_{theater}_{today.day}_{start_time}"
+                                                    "id": f"{theater}_{target_date.month}_{target_date.day}_{time_str}"
                                                 }
                                                 if g["id"] not in [x["id"] for x in all_greetings]:
                                                     all_greetings.append(g)
-                                                    print(f"    ★ 무대인사: {g['date']} {g['time']}")
-                                except:
-                                    continue
-
-                            page.keyboard.press("Escape")
-                            page.wait_for_timeout(1000)
-
+                            else:
+                                print(f"  {day}요일 무대인사 없음")
                         except Exception as e:
-                            page.keyboard.press("Escape")
-                            continue
+                            print(f"  {day}요일 오류: {e}")
 
                 except Exception as e:
-                    print(f"  오류: {e}")
+                    print(f"  [{theater}] 오류: {e}")
                     continue
 
             browser.close()
+            print("\n" + "="*50)
+            print("모든 극장 확인 완료!")
 
     except Exception as e:
         print(f"브라우저 오류: {e}")
