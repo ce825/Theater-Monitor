@@ -188,16 +188,17 @@ def check_stage_greetings():
                                 # 먼저 JavaScript로 날짜 요소를 화면에 스크롤
                                 scroll_result = page.evaluate(
                                     """(args) => {
-                                    const day = args.day;
-                                    const dateNum = args.dateNum;
-                                    const datePadded = args.datePadded;
-                                    const items = document.querySelectorAll('li, button, div, span, a');
-                                    for (const item of items) {
-                                        const text = (item.innerText || '').trim();
+                                    var day = args.day;
+                                    var dateNum = args.dateNum;
+                                    var datePadded = args.datePadded;
+                                    var items = document.querySelectorAll('li, button, div, span, a');
+                                    for (var i = 0; i < items.length; i++) {
+                                        var item = items[i];
+                                        var rect = item.getBoundingClientRect();
+                                        if (rect.top > 350 || rect.top < 0) continue;
+                                        var text = (item.innerText || '').trim();
                                         if (text === day + '\\n' + datePadded ||
-                                            text === day + '\\n' + dateNum ||
-                                            text === day + ' ' + datePadded ||
-                                            text === day + ' ' + dateNum) {
+                                            text === day + '\\n' + dateNum) {
                                             item.scrollIntoView({behavior: 'instant', block: 'center', inline: 'center'});
                                             return {found: true, text: text};
                                         }
@@ -230,19 +231,20 @@ def check_stage_greetings():
                                 if not date_clicked:
                                     js_click = page.evaluate(
                                         """(args) => {
-                                        const day = args.day;
-                                        const dateNum = args.dateNum;
-                                        const datePadded = args.datePadded;
-                                        const items = document.querySelectorAll('li, button, div, span, a');
-                                        for (const item of items) {
-                                            const text = (item.innerText || '').trim();
+                                        var day = args.day;
+                                        var dateNum = args.dateNum;
+                                        var datePadded = args.datePadded;
+                                        var items = document.querySelectorAll('li, button, div, span, a');
+                                        for (var i = 0; i < items.length; i++) {
+                                            var item = items[i];
+                                            var rect = item.getBoundingClientRect();
+                                            if (rect.top > 350 || rect.top < 0) continue;
+                                            var text = (item.innerText || '').trim();
                                             if (text === day + '\\n' + datePadded ||
-                                                text === day + '\\n' + dateNum ||
-                                                text === day + ' ' + datePadded ||
-                                                text === day + ' ' + dateNum) {
+                                                text === day + '\\n' + dateNum) {
                                                 if (!item.disabled && !item.className.includes('disabled')) {
                                                     item.click();
-                                                    return {clicked: true, text: text};
+                                                    return {clicked: true, text: text, top: rect.top};
                                                 } else {
                                                     return {clicked: false, disabled: true};
                                                 }
@@ -328,7 +330,7 @@ def check_stage_greetings():
                                     for i, line in enumerate(lines):
                                         line_stripped = line.strip()
                                         # 이벤트 키워드가 포함된 줄 찾기
-                                        if any(kw in line_stripped for kw in event_keywords):
+                                        if any(kw in line_stripped for kw in found_events):
                                             # 같은 줄에서 시간 찾기
                                             tm_same = re.search(r'(\d{1,2}:\d{2})', line_stripped)
                                             if tm_same:
