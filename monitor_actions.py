@@ -280,8 +280,14 @@ def check_stage_greetings():
 
                                 # 무대인사/GV/시네마톡 확인
                                 body = page.inner_text("body")
-                                event_keywords = ["무대인사", "GV", "시네마톡"]
-                                found_events = [kw for kw in event_keywords if kw in body]
+                                found_events = []
+                                if "무대인사" in body:
+                                    found_events.append("무대인사")
+                                if "시네마톡" in body:
+                                    found_events.append("시네마톡")
+                                # GV는 독립 단어로만 검색 (CGV 오탐 방지)
+                                if re.search(r'(?<!C)GV(?!C)', body):
+                                    found_events.append("GV")
 
                                 if found_events:
                                     print(f"  ★ {day}요일 {date_num}일 이벤트 발견: {', '.join(found_events)}")
