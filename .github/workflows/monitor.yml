@@ -2,7 +2,7 @@ name: CGV Stage Greeting Monitor
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # 30분마다
+    - cron: '*/10 * * * *'  # 10분마다
   workflow_dispatch:
 
 jobs:
