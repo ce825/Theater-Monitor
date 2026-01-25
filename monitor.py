@@ -15,16 +15,25 @@ from playwright_stealth import Stealth
 # 설정
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1464630439116410963/NWuBIWCBPmlajS4sXmZ9P-P53OKmQt48rFt8im6Yo3NDkc4-ohC0SY6ZPt5R8C3Owp3y"
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stage_greetings.json")
-CGV_URL = "https://cgv.co.kr/cnm/movieBook"
 
-# 타겟 극장 리스트: (지역, 극장명)
-TARGET_THEATERS = [
+# CGV 설정
+CGV_URL = "https://cgv.co.kr/cnm/movieBook"
+CGV_THEATERS = [
     ("서울", "용산아이파크몰"),
     ("서울", "영등포"),
     ("서울", "왕십리"),
     ("서울", "건대입구"),
     ("서울", "강변"),
     ("서울", "여의도"),
+]
+
+# 메가박스 설정
+MEGABOX_URL = "https://www.megabox.co.kr/booking"
+MEGABOX_THEATERS = [
+    ("서울", "코엑스"),
+    ("서울", "홍대"),
+    ("서울", "목동"),
+    ("서울", "구의이스트폴"),
 ]
 
 
@@ -85,7 +94,7 @@ def check_stage_greetings():
             page = context.new_page()
 
             # 각 극장별로 확인
-            for region, theater in TARGET_THEATERS:
+            for region, theater in CGV_THEATERS:
                 print(f"\n{'='*50}")
                 print(f"[{region} > {theater}] 확인 중...")
                 print('='*50)
@@ -420,6 +429,279 @@ def check_stage_greetings():
         return all_greetings
 
 
+def check_megabox_greetings():
+    """메가박스 타겟 극장들의 주말 무대인사/GV/시네마톡 확인"""
+    all_greetings = []
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                viewport={'width': 1920, 'height': 1080}
+            )
+            page = context.new_page()
+
+            # 메인 페이지에서 빠른예매로 이동
+            page.goto('https://www.megabox.co.kr/', timeout=60000)
+            page.wait_for_timeout(2000)
+            page.click('text=빠른예매', timeout=5000)
+            page.wait_for_timeout(5000)
+
+            # 예매 iframe 찾기
+            booking_frame = None
+            for frame in page.frames:
+                if 'SimpleBooking' in frame.url:
+                    booking_frame = frame
+                    break
+
+            if not booking_frame:
+                print("[메가박스] 예매 iframe을 찾지 못함")
+                browser.close()
+                return all_greetings
+
+            print("[메가박스] 예매 iframe 발견")
+
+            # 영화 목록 추출
+            movies = booking_frame.evaluate("""() => {
+                var text = document.body.innerText;
+                var lines = text.split('\\n');
+                var movies = [];
+                var inMovieSection = false;
+                for (var i = 0; i < lines.length; i++) {
+                    var trimmed = lines[i].trim();
+                    if (trimmed === '영화') {
+                        inMovieSection = true;
+                        continue;
+                    }
+                    if (trimmed === '극장' || trimmed === '시간') {
+                        break;
+                    }
+                    if (inMovieSection && trimmed.length > 1 &&
+                        trimmed.indexOf('세이상관람가') === -1 &&
+                        trimmed.indexOf('전체관람가') === -1 &&
+                        trimmed.indexOf('청소년관람불가') === -1 &&
+                        trimmed.indexOf('보고싶어') === -1 &&
+                        trimmed.indexOf('전체') === -1 &&
+                        trimmed.indexOf('큐레이션') === -1) {
+                        movies.push(trimmed);
+                    }
+                }
+                return movies;
+            }""")
+
+            print(f"[메가박스] 영화 {len(movies)}개 발견: {movies[:5]}...")
+
+            # 타겟 극장 이름
+            theater_names = [t[1] for t in MEGABOX_THEATERS]
+
+            # 3개씩 영화 배치 처리
+            batch_size = 3
+            for batch_start in range(0, len(movies), batch_size):
+                batch_movies = movies[batch_start:batch_start + batch_size]
+                print(f"\n{'='*50}")
+                print(f"[메가박스] 배치 {batch_start//batch_size + 1}: {batch_movies}")
+                print('='*50)
+
+                try:
+                    # 새로고침 (첫 배치 제외)
+                    if batch_start > 0:
+                        page.goto('https://www.megabox.co.kr/', timeout=60000)
+                        page.wait_for_timeout(2000)
+                        page.click('text=빠른예매', timeout=5000)
+                        page.wait_for_timeout(5000)
+
+                        # iframe 다시 찾기
+                        booking_frame = None
+                        for frame in page.frames:
+                            if 'SimpleBooking' in frame.url:
+                                booking_frame = frame
+                                break
+                        if not booking_frame:
+                            continue
+
+                    # 1. 영화 3개 클릭
+                    for movie in batch_movies:
+                        clicked = booking_frame.evaluate("""(movieTitle) => {
+                            var elements = document.querySelectorAll('*');
+                            for (var i = 0; i < elements.length; i++) {
+                                var el = elements[i];
+                                if (el.innerText && el.innerText.trim() === movieTitle &&
+                                    el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                                    el.click();
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }""", movie)
+                        if clicked:
+                            print(f"  영화 선택: {movie}")
+                        booking_frame.wait_for_timeout(300)
+
+                    # 2. 서울 지역 클릭
+                    try:
+                        booking_frame.click("text=/서울\\(\\d+\\)/", timeout=3000)
+                        booking_frame.wait_for_timeout(1000)
+                        print("  서울 지역 클릭")
+                    except:
+                        print("  서울 지역 클릭 실패 (이미 선택됨)")
+
+                    # 3. 타겟 극장 4개 클릭
+                    for theater in theater_names:
+                        clicked = booking_frame.evaluate("""(theaterName) => {
+                            var elements = document.querySelectorAll('*');
+                            for (var i = 0; i < elements.length; i++) {
+                                var el = elements[i];
+                                if (el.innerText && el.innerText.trim() === theaterName) {
+                                    el.click();
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }""", theater)
+                        if clicked:
+                            print(f"  극장 선택: {theater}")
+                        booking_frame.wait_for_timeout(300)
+
+                    booking_frame.wait_for_timeout(1000)
+
+                    # 4. 주말 날짜 클릭 및 확인
+                    frame_text = booking_frame.inner_text("body")
+
+                    # 토/일 날짜 찾기 - 패턴: "31\n일\n토" (날짜, 요일표시, 실제요일)
+                    weekend_dates = []
+                    lines = frame_text.split('\n')
+                    for i, line in enumerate(lines):
+                        line_stripped = line.strip()
+                        if line_stripped == '토' and i >= 2:
+                            date_line = lines[i-2].strip()
+                            if date_line.isdigit():
+                                weekend_dates.append({"day": "토", "date": date_line})
+                        elif line_stripped == '일' and i >= 2:
+                            date_line = lines[i-2].strip()
+                            if date_line.isdigit() and lines[i-1].strip() == '일':
+                                weekend_dates.append({"day": "일", "date": date_line})
+
+                    # 중복 제거
+                    seen = set()
+                    unique_dates = []
+                    for d in weekend_dates:
+                        key = f"{d['day']}_{d['date']}"
+                        if key not in seen:
+                            seen.add(key)
+                            unique_dates.append(d)
+
+                    print(f"  주말 날짜: {[(d['date'], d['day']) for d in unique_dates]}")
+
+                    for date_info in unique_dates:
+                        day = date_info["day"]
+                        date_num = date_info["date"]
+
+                        # 날짜 클릭
+                        date_clicked = booking_frame.evaluate(
+                            """(args) => {
+                            var dateNum = args.dateNum;
+                            var dayType = args.dayType;
+                            var elements = document.querySelectorAll('a, button, li, div, span');
+                            for (var i = 0; i < elements.length; i++) {
+                                var el = elements[i];
+                                var text = (el.innerText || '').trim();
+                                if (text.indexOf(dateNum) !== -1 && text.indexOf(dayType) !== -1) {
+                                    if (text.length < 20) {
+                                        el.click();
+                                        return {success: true, text: text};
+                                    }
+                                }
+                            }
+                            return {success: false};
+                        }""", {"dateNum": date_num, "dayType": day})
+
+                        if not date_clicked.get('success'):
+                            print(f"    날짜 클릭 실패: {date_num} {day}")
+                            continue
+
+                        booking_frame.wait_for_timeout(2000)
+                        print(f"    날짜 클릭 성공: {date_num} ({day})")
+
+                        # 5. 무대인사 확인
+                        body = booking_frame.inner_text("body")
+                        found_events = []
+                        if "무대인사" in body:
+                            found_events.append("무대인사")
+                        if "시네마톡" in body:
+                            found_events.append("시네마톡")
+                        if re.search(r'(?<!E)GV(?!I)', body):
+                            found_events.append("GV")
+
+                        if found_events:
+                            print(f"    ★ 이벤트 발견: {', '.join(found_events)}")
+
+                            # 날짜 계산
+                            today = datetime.now()
+                            target_day = int(date_num)
+                            if target_day >= today.day:
+                                current_month = today.month
+                                current_year = today.year
+                            else:
+                                current_month = today.month + 1 if today.month < 12 else 1
+                                current_year = today.year if today.month < 12 else today.year + 1
+
+                            date_str = f"{current_month}월 {date_num}일 ({day})"
+
+                            # 시간 추출
+                            body_lines = body.split('\n')
+                            for i, line in enumerate(body_lines):
+                                if any(ev in line for ev in found_events):
+                                    for j in range(max(0, i-10), min(len(body_lines), i+10)):
+                                        tm = re.search(r'(\d{1,2}:\d{2})', body_lines[j])
+                                        if tm:
+                                            time_str = tm.group(1)
+                                            event_type_str = "/".join(found_events)
+                                            movie_name = batch_movies[0] if batch_movies else "미정"
+
+                                            # 극장 찾기
+                                            theater_found = ""
+                                            for t in theater_names:
+                                                if t in body:
+                                                    theater_found = t
+                                                    break
+
+                                            greeting_id = f"megabox_{theater_found}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_name[:5]}"
+
+                                            if greeting_id not in [x["id"] for x in all_greetings]:
+                                                print(f"      [{event_type_str}] {movie_name} @ 메가박스 {theater_found} {time_str}")
+                                                g = {
+                                                    "movie": movie_name,
+                                                    "theater": f"메가박스 {theater_found}" if theater_found else "메가박스",
+                                                    "date": date_str,
+                                                    "time": time_str,
+                                                    "hall": "",
+                                                    "event_type": event_type_str,
+                                                    "id": greeting_id
+                                                }
+                                                all_greetings.append(g)
+                                            break
+                        else:
+                            print(f"    이벤트 없음")
+
+                except Exception as e:
+                    print(f"  배치 오류: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+
+            browser.close()
+            print("\n" + "="*50)
+            print(f"메가박스 확인 완료! {len(all_greetings)}개 발견")
+
+    except Exception as e:
+        print(f"메가박스 오류: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return all_greetings
+
+
 def check_stage_greetings_old():
     """이전 버전 - 사용 안함"""
     all_greetings = []
@@ -461,7 +743,7 @@ def check_stage_greetings_old():
                     movie_img.click(force=True)
                     page.wait_for_timeout(4000)
 
-                    for region, theater in TARGET_THEATERS:
+                    for region, theater in CGV_THEATERS:
                         try:
                             # 극장 선택 팝업 열기
                             try:
@@ -549,18 +831,28 @@ def check_stage_greetings_old():
 
 
 def main():
-    print(f"[{datetime.now()}] CGV 주말 무대인사 모니터링 시작...")
+    print(f"[{datetime.now()}] CGV + 메가박스 무대인사 모니터링 시작...")
 
     saved_data = load_saved_data()
     saved_ids = set(g.get("id", "") for g in saved_data.get("greetings", []))
 
-    greetings = check_stage_greetings()
+    # CGV 확인
+    print(f"\n[{datetime.now()}] === CGV 모니터링 ===")
+    cgv_greetings = check_stage_greetings()
+    if cgv_greetings is None:
+        cgv_greetings = []
+    print(f"[{datetime.now()}] CGV: {len(cgv_greetings)}개 발견")
 
-    if greetings is None:
-        print(f"[{datetime.now()}] 조회 실패")
-        return
+    # 메가박스 확인
+    print(f"\n[{datetime.now()}] === 메가박스 모니터링 ===")
+    megabox_greetings = check_megabox_greetings()
+    if megabox_greetings is None:
+        megabox_greetings = []
+    print(f"[{datetime.now()}] 메가박스: {len(megabox_greetings)}개 발견")
 
-    print(f"\n[{datetime.now()}] 총 {len(greetings)}개 무대인사 발견")
+    # 합치기
+    greetings = cgv_greetings + megabox_greetings
+    print(f"\n[{datetime.now()}] 총 {len(greetings)}개 이벤트 발견 (CGV: {len(cgv_greetings)}, 메가박스: {len(megabox_greetings)})")
 
     # 첫 실행
     if not saved_data.get("greetings"):
@@ -569,7 +861,7 @@ def main():
         save_data(saved_data)
 
         if greetings:
-            msg = {"content": f"✅ CGV 무대인사 모니터링 시작!\n현재 {len(greetings)}개 주말 무대인사 추적 중"}
+            msg = {"content": f"✅ CGV + 메가박스 무대인사 모니터링 시작!\n현재 {len(greetings)}개 이벤트 추적 중 (CGV: {len(cgv_greetings)}, 메가박스: {len(megabox_greetings)})"}
             try:
                 requests.post(DISCORD_WEBHOOK_URL, json=msg, timeout=10)
             except:
@@ -580,14 +872,14 @@ def main():
     new_greetings = [g for g in greetings if g.get("id") and g["id"] not in saved_ids]
 
     if new_greetings:
-        print(f"[{datetime.now()}] 새 무대인사 {len(new_greetings)}개!")
+        print(f"[{datetime.now()}] 새 이벤트 {len(new_greetings)}개!")
         for g in new_greetings:
             send_discord_notification(g)
 
         saved_data["greetings"].extend(new_greetings)
         save_data(saved_data)
     else:
-        print(f"[{datetime.now()}] 새 무대인사 없음")
+        print(f"[{datetime.now()}] 새 이벤트 없음")
 
 
 if __name__ == "__main__":
