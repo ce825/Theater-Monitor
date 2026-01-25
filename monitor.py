@@ -53,7 +53,7 @@ def send_discord_notification(greeting):
 
     embed = {
         "embeds": [{
-            "title": "🎬 새로운 상영 이벤트가 등록되었습니다!",
+            "title": "새로운 상영 이벤트가 등록되었습니다!",
             "url": CGV_URL,
             "color": 5814783,
             "fields": fields,
