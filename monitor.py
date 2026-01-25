@@ -120,101 +120,279 @@ def check_stage_greetings():
                     page.wait_for_timeout(4000)
                     print(f"  극장 선택 완료")
 
-                    # 6. 주말 날짜 클릭 (토, 일)
-                    for day in ["토", "일"]:
-                        try:
-                            js_code = """() => {
-                                const day = '%s';
-                                const elements = document.querySelectorAll('button, li, a, div, span');
-                                for (const el of elements) {
-                                    const text = (el.innerText || '').trim();
-                                    const pattern = new RegExp('^' + day + '[\\\\s\\\\n]+\\\\d');
-                                    if (pattern.test(text)) {
-                                        el.click();
-                                        return text;
-                                    }
-                                }
-                                return false;
-                            }""" % day
-                            clicked = page.evaluate(js_code)
-                            if not clicked:
-                                continue
-                            page.wait_for_timeout(2500)
+                    # 6. 모든 주말 날짜 확인 (화살표 클릭으로 날짜 범위 확장)
+                    checked_dates = set()  # 이미 확인한 날짜 추적
+                    max_arrow_clicks = 10  # 최대 화살표 클릭 횟수 (무한 루프 방지)
+                    arrow_clicks = 0
 
-                            # 7. 무대인사 확인
-                            body = page.inner_text("body")
-                            if "무대인사" in body:
-                                print(f"  ★ {day}요일 무대인사 발견!")
-                                today = datetime.now()
-                                day_offset = 0 if day == "토" else 1
-                                days_until_sat = (5 - today.weekday()) % 7
-                                if today.weekday() == 5:
-                                    days_until_sat = 0
-                                elif today.weekday() == 6:
-                                    days_until_sat = 6
+                    while arrow_clicks <= max_arrow_clicks:
+                        # 페이지 전체 텍스트에서 주말 날짜 찾기
+                        page_text = page.inner_text("body")
+                        weekend_dates = []
 
-                                target_date = today + timedelta(days=days_until_sat + day_offset)
-                                date_str = f"{target_date.month}월 {target_date.day}일 ({day})"
+                        # "토\n숫자" 또는 "일\n숫자" 패턴 찾기 (2자리 숫자 우선)
+                        import re
+                        for match in re.finditer(r'토\s*\n?\s*(\d{1,2})', page_text):
+                            date_num = match.group(1).lstrip('0') or '0'  # 앞의 0 제거
+                            weekend_dates.append({"day": "토", "date": date_num})
+                        for match in re.finditer(r'일\s*\n?\s*(\d{1,2})', page_text):
+                            date_num = match.group(1).lstrip('0') or '0'
+                            weekend_dates.append({"day": "일", "date": date_num})
 
-                                # 시간 및 영화 제목 추출
-                                lines = body.split('\n')
-                                exclude_words = ["무대인사", "GV", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표"]
-                                # 상영관 이름 패턴 (영화 제목에서 제외)
-                                hall_patterns = r'(DOLBY|ATMOS|SCREENX|SOUNDX|4DX|IMAX|SPHERE|Laser|리클라이너|아트하우스|\d+관|2D|3D|전도연관|씨네앤포레|씨네\&포레|CINE|MX관|GOLD CLASS|SUITE CINEMA|PREMIUM|TEMPUR|STARIUM|CGV|특별관|일반|조조)'
+                        # 중복 제거 및 정렬 (날짜순)
+                        seen = set()
+                        unique_dates = []
+                        for d in weekend_dates:
+                            key = f"{d['day']}_{d['date']}"
+                            if key not in seen:
+                                seen.add(key)
+                                unique_dates.append(d)
+                        # 날짜 숫자로 정렬
+                        weekend_dates = sorted(unique_dates, key=lambda x: int(x['date']))
 
-                                # 먼저 페이지에서 영화 제목 후보들을 수집
-                                movie_candidates = []
-                                for idx, line in enumerate(lines):
-                                    text = line.strip()
-                                    # 영화 제목 조건: 한글 포함, 적당한 길이, 특수문자로 시작 안함
-                                    if len(text) >= 2 and re.search(r'[가-힣]', text):
-                                        if not re.match(r'^[\d:~\-\(\)\[\]관]', text):
-                                            if text not in exclude_words:
-                                                if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', text):
-                                                    if not re.search(hall_patterns, text, re.IGNORECASE):
-                                                        movie_candidates.append((idx, text))
+                        found_dates = [d['day'] + d['date'] for d in weekend_dates]
+                        print(f"  발견된 주말: {found_dates}")
 
-                                for i, line in enumerate(lines):
-                                    line_stripped = line.strip()
-                                    if line_stripped == "무대인사":
-                                        for j in range(max(0, i-5), i):
-                                            tm = re.search(r'(\d{1,2}:\d{2})', lines[j])
-                                            if tm:
-                                                time_str = tm.group(1)
-                                                movie_name = ""
-
-                                                # 방법 1: 무대인사 위로 올라가며 영화 제목 찾기 (범위 확장)
-                                                for k in range(i-1, max(0, i-30), -1):
-                                                    candidate = lines[k].strip()
-                                                    if len(candidate) >= 2 and re.search(r'[가-힣]', candidate):
-                                                        if not re.match(r'^[\d:~\-\(\)\[\]관]', candidate):
-                                                            if candidate not in exclude_words:
-                                                                if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', candidate):
-                                                                    if not re.search(hall_patterns, candidate, re.IGNORECASE):
-                                                                        movie_name = candidate
-                                                                        break
-
-                                                # 방법 2: 못 찾으면 가장 가까운 영화 제목 후보 사용
-                                                if not movie_name and movie_candidates:
-                                                    closest = min(movie_candidates, key=lambda x: abs(x[0] - i))
-                                                    if abs(closest[0] - i) < 50:
-                                                        movie_name = closest[1]
-
-                                                print(f"    - {movie_name} {time_str}")
-                                                g = {
-                                                    "movie": movie_name if movie_name else "무대인사",
-                                                    "theater": f"CGV {theater}",
-                                                    "date": date_str,
-                                                    "time": time_str,
-                                                    "hall": "",
-                                                    "id": f"{theater}_{target_date.month}_{target_date.day}_{time_str}"
-                                                }
-                                                if g["id"] not in [x["id"] for x in all_greetings]:
-                                                    all_greetings.append(g)
+                        # 새로운 주말 날짜가 없으면 종료
+                        new_dates = [d for d in weekend_dates if f"{d['day']}_{d['date']}" not in checked_dates]
+                        if not new_dates:
+                            if arrow_clicks == 0 and not weekend_dates:
+                                # 첫 시도에서 주말 날짜가 없으면 화살표 클릭 후 재시도
+                                pass
                             else:
-                                print(f"  {day}요일 무대인사 없음")
-                        except Exception as e:
-                            print(f"  {day}요일 오류: {e}")
+                                print(f"  더 이상 새로운 주말 날짜 없음 → 다음 극장")
+                                break
+
+                        # 새로운 날짜만 확인 (이미 체크한 날짜 건너뛰기)
+                        for date_info in new_dates:
+                            day = date_info["day"]
+                            date_num = date_info["date"]
+                            date_key = f"{day}_{date_num}"
+                            checked_dates.add(date_key)
+
+                            try:
+                                # 해당 날짜 클릭 (Playwright locator 사용)
+                                date_clicked = False
+
+                                # 날짜 패턴들 시도 (07, 7 등 다양한 형태)
+                                date_padded = date_num.zfill(2)
+                                patterns = [
+                                    f"text=/{day}\\n{date_padded}$/",
+                                    f"text=/{day}\\n{date_num}$/",
+                                    f"text=/{day}.*{date_padded}/",
+                                    f"text=/{day}.*{date_num}/"
+                                ]
+
+                                # 먼저 JavaScript로 날짜 요소를 화면에 스크롤
+                                scroll_result = page.evaluate(
+                                    """(args) => {
+                                    const day = args.day;
+                                    const dateNum = args.dateNum;
+                                    const datePadded = args.datePadded;
+                                    const items = document.querySelectorAll('li, button, div, span, a');
+                                    for (const item of items) {
+                                        const text = (item.innerText || '').trim();
+                                        if (text === day + '\\n' + datePadded ||
+                                            text === day + '\\n' + dateNum ||
+                                            text === day + ' ' + datePadded ||
+                                            text === day + ' ' + dateNum) {
+                                            item.scrollIntoView({behavior: 'instant', block: 'center', inline: 'center'});
+                                            return {found: true, text: text};
+                                        }
+                                    }
+                                    return {found: false};
+                                }""", {"day": day, "dateNum": date_num, "datePadded": date_padded})
+
+                                if scroll_result.get("found"):
+                                    page.wait_for_timeout(500)
+
+                                # 날짜 클릭 시도
+                                for pattern in patterns:
+                                    if date_clicked:
+                                        break
+                                    try:
+                                        locator = page.locator(pattern).first
+                                        if locator.is_visible(timeout=1000):
+                                            # disabled 체크
+                                            is_disabled = locator.evaluate("el => el.disabled || el.className.includes('disabled')")
+                                            if not is_disabled:
+                                                locator.click(timeout=3000)
+                                                date_clicked = True
+                                                print(f"    날짜 클릭: {day} {date_num}")
+                                            else:
+                                                print(f"    날짜 비활성: {day} {date_num}")
+                                    except:
+                                        pass
+
+                                # 여전히 클릭 안 되면 JavaScript로 직접 클릭 시도
+                                if not date_clicked:
+                                    js_click = page.evaluate(
+                                        """(args) => {
+                                        const day = args.day;
+                                        const dateNum = args.dateNum;
+                                        const datePadded = args.datePadded;
+                                        const items = document.querySelectorAll('li, button, div, span, a');
+                                        for (const item of items) {
+                                            const text = (item.innerText || '').trim();
+                                            if (text === day + '\\n' + datePadded ||
+                                                text === day + '\\n' + dateNum ||
+                                                text === day + ' ' + datePadded ||
+                                                text === day + ' ' + dateNum) {
+                                                if (!item.disabled && !item.className.includes('disabled')) {
+                                                    item.click();
+                                                    return {clicked: true, text: text};
+                                                } else {
+                                                    return {clicked: false, disabled: true};
+                                                }
+                                            }
+                                        }
+                                        return {clicked: false, notFound: true};
+                                    }""", {"day": day, "dateNum": date_num, "datePadded": date_padded})
+
+                                    if js_click.get("clicked"):
+                                        date_clicked = True
+                                        print(f"    날짜 클릭(JS): {day} {date_num}")
+                                    elif js_click.get("disabled"):
+                                        print(f"    날짜 비활성: {day} {date_num}")
+
+                                if not date_clicked:
+                                    print(f"    날짜 스킵: {day} {date_num}")
+                                    continue
+                                page.wait_for_timeout(3000)
+
+                                # 페이지 스크롤하여 모든 영화 로드 (lazy loading 대응)
+                                page.evaluate("""() => {
+                                    // 페이지 끝까지 스크롤
+                                    window.scrollTo(0, document.body.scrollHeight);
+                                }""")
+                                page.wait_for_timeout(1500)
+                                page.evaluate("""() => {
+                                    // 다시 위로 스크롤
+                                    window.scrollTo(0, 0);
+                                }""")
+                                page.wait_for_timeout(1000)
+
+                                # 무대인사 확인
+                                body = page.inner_text("body")
+
+                                if "무대인사" in body:
+                                    print(f"  ★ {day}요일 {date_num}일 무대인사 발견!")
+
+                                    # 날짜 계산: 현재 날짜 기준으로 해당 일자의 실제 월 계산
+                                    today = datetime.now()
+                                    target_day = int(date_num)
+
+                                    # 현재 월에서 해당 일자 찾기
+                                    if target_day >= today.day:
+                                        # 같은 달
+                                        current_month = today.month
+                                        current_year = today.year
+                                    else:
+                                        # 다음 달
+                                        if today.month == 12:
+                                            current_month = 1
+                                            current_year = today.year + 1
+                                        else:
+                                            current_month = today.month + 1
+                                            current_year = today.year
+
+                                    date_str = f"{current_month}월 {date_num}일 ({day})"
+
+                                    # 시간 및 영화 제목 추출
+                                    lines = body.split('\n')
+                                    exclude_words = ["무대인사", "GV", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표", "예매종료", "매진", "영화순", "시간순", "극장별 예매", "영화별예매"]
+                                    hall_patterns = r'(DOLBY|ATMOS|SCREENX|SOUNDX|4DX|IMAX|SPHERE|Laser|리클라이너|아트하우스|\d+관|2D|3D|전도연관|씨네앤포레|씨네\&포레|CINE|MX관|GOLD CLASS|SUITE CINEMA|PREMIUM|TEMPUR|STARIUM|CGV|특별관|일반|조조)'
+
+                                    movie_candidates = []
+                                    for idx, line in enumerate(lines):
+                                        text = line.strip()
+                                        if len(text) >= 2 and re.search(r'[가-힣]', text):
+                                            if not re.match(r'^[\d:~\-\(\)\[\]관]', text):
+                                                if text not in exclude_words:
+                                                    if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', text):
+                                                        if not re.search(hall_patterns, text, re.IGNORECASE):
+                                                            movie_candidates.append((idx, text))
+
+                                    # 무대인사가 포함된 모든 줄 찾기 (정확히 일치 또는 포함)
+                                    found_times = set()
+                                    for i, line in enumerate(lines):
+                                        line_stripped = line.strip()
+                                        # "무대인사"가 포함된 줄 찾기
+                                        if "무대인사" in line_stripped:
+                                            # 같은 줄에서 시간 찾기
+                                            tm_same = re.search(r'(\d{1,2}:\d{2})', line_stripped)
+                                            if tm_same:
+                                                found_times.add((i, tm_same.group(1)))
+                                            # 위 줄에서 시간 찾기 (5줄 이내)
+                                            for j in range(max(0, i-5), i):
+                                                tm = re.search(r'(\d{1,2}:\d{2})', lines[j])
+                                                if tm:
+                                                    found_times.add((i, tm.group(1)))
+
+                                    # 각 시간에 대해 영화 정보 추출
+                                    for (line_idx, time_str) in found_times:
+                                        movie_name = ""
+
+                                        # 무대인사 위로 올라가며 영화 제목 찾기
+                                        for k in range(line_idx-1, max(0, line_idx-40), -1):
+                                            candidate = lines[k].strip()
+                                            if len(candidate) >= 2 and re.search(r'[가-힣]', candidate):
+                                                if not re.match(r'^[\d:~\-\(\)\[\]관]', candidate):
+                                                    if candidate not in exclude_words:
+                                                        if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', candidate):
+                                                            if not re.search(hall_patterns, candidate, re.IGNORECASE):
+                                                                movie_name = candidate
+                                                                break
+
+                                        if not movie_name and movie_candidates:
+                                            closest = min(movie_candidates, key=lambda x: abs(x[0] - line_idx))
+                                            if abs(closest[0] - line_idx) < 50:
+                                                movie_name = closest[1]
+
+                                        movie_final = movie_name if movie_name else "무대인사"
+                                        greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_final[:10]}"
+
+                                        # 중복 체크
+                                        if greeting_id not in [x["id"] for x in all_greetings]:
+                                            print(f"    - {movie_final} {time_str}")
+                                            g = {
+                                                "movie": movie_final,
+                                                "theater": f"CGV {theater}",
+                                                "date": date_str,
+                                                "time": time_str,
+                                                "hall": "",
+                                                "id": greeting_id
+                                            }
+                                            all_greetings.append(g)
+                                else:
+                                    print(f"  {day}요일 {date_num}일 무대인사 없음")
+                            except Exception as e:
+                                print(f"  {day}요일 {date_num}일 오류: {e}")
+
+                        # 화살표 버튼 클릭하여 다음 날짜 범위로 이동
+                        # 날짜 영역 상단(y < 300)에 있는 ">" 버튼만 클릭
+                        arrow_clicked = page.evaluate(
+                            """() => {
+                            const arrows = document.querySelectorAll('button, a, div, span');
+                            for (const el of arrows) {
+                                const text = (el.innerText || '').trim();
+                                const rect = el.getBoundingClientRect();
+                                // 상단 날짜 영역(y < 300)에 있고, ">" 문자인 경우만
+                                if (rect.top < 300 && rect.top > 0 && (text === '>' || text === String.fromCharCode(8250))) {
+                                    el.click();
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }""")
+
+                        if not arrow_clicked:
+                            print(f"  화살표 버튼 없음 → 다음 극장")
+                            break
+
+                        arrow_clicks += 1
+                        print(f"  → 다음 날짜 범위로 이동 ({arrow_clicks})")
+                        page.wait_for_timeout(2000)
 
                 except Exception as e:
                     print(f"  [{theater}] 오류: {e}")
