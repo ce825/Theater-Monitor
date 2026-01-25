@@ -16,6 +16,7 @@ from playwright_stealth import Stealth
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1464630439116410963/NWuBIWCBPmlajS4sXmZ9P-P53OKmQt48rFt8im6Yo3NDkc4-ohC0SY6ZPt5R8C3Owp3y"
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stage_greetings.json")
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
+CGV_APP_LINK = "https://m.cgv.co.kr/ulink/"  # 모바일에서 CGV 앱 실행
 
 # 타겟 극장 리스트: (지역, 극장명)
 TARGET_THEATERS = [
@@ -54,7 +55,7 @@ def send_discord_notification(greeting):
     embed = {
         "embeds": [{
             "title": "새로운 상영 이벤트가 등록되었습니다!",
-            "url": CGV_URL,
+            "url": CGV_APP_LINK,
             "color": 5814783,
             "fields": fields,
             "footer": {"text": "CGV 무대인사/GV/시네마톡 알림"},
