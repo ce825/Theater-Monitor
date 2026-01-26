@@ -180,7 +180,7 @@ def send_discord_notification(event):
                 "title": f"🎬 [{event['eventType']}] 롯데시네마",
                 "description": event["movieName"],
                 "url": booking_url,
-                "color": 0xED1C24,  # 롯데시네마 빨간색
+                "color": 0xFFFFFF,  # 흰색
                 "fields": [
                     {"name": "📍 지점", "value": event["cinemaName"], "inline": True},
                     {"name": "📅 날짜", "value": formatted_date, "inline": True},
