@@ -266,41 +266,104 @@ def check_stage_greetings():
 
                                 # 페이지 스크롤하여 모든 영화 로드 (lazy loading 대응)
                                 page.evaluate("""() => {
-                                    // 페이지 끝까지 스크롤
                                     window.scrollTo(0, document.body.scrollHeight);
                                 }""")
                                 page.wait_for_timeout(1500)
                                 page.evaluate("""() => {
-                                    // 다시 위로 스크롤
                                     window.scrollTo(0, 0);
                                 }""")
                                 page.wait_for_timeout(1000)
 
-                                # 무대인사/GV/시네마톡 확인
-                                body = page.inner_text("body")
-                                found_events = []
-                                if "무대인사" in body:
-                                    found_events.append("무대인사")
-                                if "시네마톡" in body:
-                                    found_events.append("시네마톡")
-                                # GV는 독립 단어로만 검색 (CGV 오탐 방지)
-                                if re.search(r'(?<!C)GV(?!C)', body):
-                                    found_events.append("GV")
+                                # 상영 시간표에서 영화별 무대인사/GV/시네마톡 추출
+                                movie_events = page.evaluate("""() => {
+                                    var results = [];
+                                    var movieSections = document.querySelectorAll('[class*="movie"], [class*="Movie"], .time-table-wrap, .sect-showtimes');
 
-                                if found_events:
-                                    print(f"  ★ {day}요일 {date_num}일 이벤트 발견: {', '.join(found_events)}")
+                                    if (movieSections.length === 0) {
+                                        movieSections = document.querySelectorAll('body > div');
+                                    }
 
-                                    # 날짜 계산: 현재 날짜 기준으로 해당 일자의 실제 월 계산
+                                    var bodyText = document.body.innerText;
+                                    var lines = bodyText.split('\\n');
+                                    var currentMovie = '';
+                                    var currentTimes = [];
+                                    var inTimeSection = false;
+
+                                    for (var i = 0; i < lines.length; i++) {
+                                        var line = lines[i].trim();
+
+                                        // Skip empty lines and common UI elements
+                                        if (!line || line.length < 2) continue;
+                                        if (/^(전체|오전|오후|18시|심야|영화순|시간순|예매|CGV|2D|3D|IMAX|Laser|관$)/.test(line)) continue;
+
+                                        // Detect movie title (Korean text, not time, not seat info)
+                                        if (/^[가-힣]/.test(line) && !/^\d/.test(line) && !/석$/.test(line) && !/(무대인사|시네마톡|GV)/.test(line) && line.length >= 2 && line.length <= 30) {
+                                            if (!/^(\d+관|DOLBY|ATMOS|SCREENX|4DX|Laser|리클라이너)/.test(line)) {
+                                                // Save previous movie if it had events
+                                                if (currentMovie && currentTimes.length > 0) {
+                                                    for (var t = 0; t < currentTimes.length; t++) {
+                                                        results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType});
+                                                    }
+                                                }
+                                                currentMovie = line;
+                                                currentTimes = [];
+                                            }
+                                        }
+
+                                        // Detect time with event tag (e.g., "14:30" followed by "무대인사")
+                                        var timeMatch = line.match(/^(\d{1,2}:\d{2})/);
+                                        if (timeMatch && currentMovie) {
+                                            var timeStr = timeMatch[1];
+                                            // Check next few lines for event tags
+                                            var hasEvent = false;
+                                            var eventType = '';
+                                            for (var j = i; j < Math.min(i + 5, lines.length); j++) {
+                                                var checkLine = lines[j];
+                                                if (checkLine.indexOf('무대인사') !== -1) {
+                                                    hasEvent = true;
+                                                    eventType = '무대인사';
+                                                    break;
+                                                }
+                                                if (checkLine.indexOf('시네마톡') !== -1) {
+                                                    hasEvent = true;
+                                                    eventType = '시네마톡';
+                                                    break;
+                                                }
+                                                if (/(?<!C)GV(?!C)/.test(checkLine) && checkLine.indexOf('CGV') === -1) {
+                                                    hasEvent = true;
+                                                    eventType = 'GV';
+                                                    break;
+                                                }
+                                                // Stop if we hit another time or movie
+                                                if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
+                                            }
+                                            if (hasEvent) {
+                                                currentTimes.push({time: timeStr, eventType: eventType});
+                                            }
+                                        }
+                                    }
+
+                                    // Don't forget last movie
+                                    if (currentMovie && currentTimes.length > 0) {
+                                        for (var t = 0; t < currentTimes.length; t++) {
+                                            results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType});
+                                        }
+                                    }
+
+                                    return results;
+                                }""")
+
+                                if movie_events and len(movie_events) > 0:
+                                    print(f"  ★ {day}요일 {date_num}일 이벤트 발견: {len(movie_events)}건")
+
+                                    # 날짜 계산
                                     today = datetime.now()
                                     target_day = int(date_num)
 
-                                    # 현재 월에서 해당 일자 찾기
                                     if target_day >= today.day:
-                                        # 같은 달
                                         current_month = today.month
                                         current_year = today.year
                                     else:
-                                        # 다음 달
                                         if today.month == 12:
                                             current_month = 1
                                             current_year = today.year + 1
@@ -310,71 +373,22 @@ def check_stage_greetings():
 
                                     date_str = f"{current_month}월 {date_num}일 ({day})"
 
-                                    # 시간 및 영화 제목 추출
-                                    lines = body.split('\n')
-                                    exclude_words = ["무대인사", "GV", "시네마톡", "전체", "오전", "오후", "18시 이후", "심야", theater, "예매", "상영시간표", "예매종료", "매진", "영화순", "시간순", "극장별 예매", "영화별예매"]
-                                    hall_patterns = r'(DOLBY|ATMOS|SCREENX|SOUNDX|4DX|IMAX|SPHERE|Laser|리클라이너|아트하우스|\d+관|2D|3D|전도연관|씨네앤포레|씨네\&포레|CINE|MX관|GOLD CLASS|SUITE CINEMA|PREMIUM|TEMPUR|STARIUM|CGV|특별관|일반|조조)'
+                                    for event in movie_events:
+                                        movie_name = event.get("movie", "미정")
+                                        time_str = event.get("time", "")
+                                        event_type = event.get("eventType", "무대인사")
 
-                                    movie_candidates = []
-                                    for idx, line in enumerate(lines):
-                                        text = line.strip()
-                                        if len(text) >= 2 and re.search(r'[가-힣]', text):
-                                            if not re.match(r'^[\d:~\-\(\)\[\]관]', text):
-                                                if text not in exclude_words:
-                                                    if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', text):
-                                                        if not re.search(hall_patterns, text, re.IGNORECASE):
-                                                            movie_candidates.append((idx, text))
+                                        greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_name[:10]}"
 
-                                    # 무대인사/GV/시네마톡이 포함된 모든 줄 찾기
-                                    found_times = set()
-                                    for i, line in enumerate(lines):
-                                        line_stripped = line.strip()
-                                        # 이벤트 키워드가 포함된 줄 찾기
-                                        if any(kw in line_stripped for kw in found_events):
-                                            # 같은 줄에서 시간 찾기
-                                            tm_same = re.search(r'(\d{1,2}:\d{2})', line_stripped)
-                                            if tm_same:
-                                                found_times.add((i, tm_same.group(1)))
-                                            # 위 줄에서 시간 찾기 (5줄 이내)
-                                            for j in range(max(0, i-5), i):
-                                                tm = re.search(r'(\d{1,2}:\d{2})', lines[j])
-                                                if tm:
-                                                    found_times.add((i, tm.group(1)))
-
-                                    # 각 시간에 대해 영화 정보 추출
-                                    for (line_idx, time_str) in found_times:
-                                        movie_name = ""
-
-                                        # 무대인사 위로 올라가며 영화 제목 찾기
-                                        for k in range(line_idx-1, max(0, line_idx-40), -1):
-                                            candidate = lines[k].strip()
-                                            if len(candidate) >= 2 and re.search(r'[가-힣]', candidate):
-                                                if not re.match(r'^[\d:~\-\(\)\[\]관]', candidate):
-                                                    if candidate not in exclude_words:
-                                                        if not re.search(r'(석|좌석|잔여|매진|마감|\d+:\d+|~|개봉)', candidate):
-                                                            if not re.search(hall_patterns, candidate, re.IGNORECASE):
-                                                                movie_name = candidate
-                                                                break
-
-                                        if not movie_name and movie_candidates:
-                                            closest = min(movie_candidates, key=lambda x: abs(x[0] - line_idx))
-                                            if abs(closest[0] - line_idx) < 50:
-                                                movie_name = closest[1]
-
-                                        movie_final = movie_name if movie_name else found_events[0]
-                                        greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_final[:10]}"
-
-                                        # 중복 체크
                                         if greeting_id not in [x["id"] for x in all_greetings]:
-                                            event_type_str = "/".join(found_events)
-                                            print(f"    - [{event_type_str}] {movie_final} {time_str}")
+                                            print(f"    - [{event_type}] {movie_name} {time_str}")
                                             g = {
-                                                "movie": movie_final,
+                                                "movie": movie_name,
                                                 "theater": f"CGV {theater}",
                                                 "date": date_str,
                                                 "time": time_str,
                                                 "hall": "",
-                                                "event_type": event_type_str,
+                                                "event_type": event_type,
                                                 "id": greeting_id
                                             }
                                             all_greetings.append(g)
