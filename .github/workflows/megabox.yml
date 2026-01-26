@@ -1,9 +1,7 @@
 name: Megabox Event Monitor
 
 on:
-  workflow_dispatch:  # 수동 실행
-  schedule:
-    - cron: '*/30 * * * *'  # 30분마다 실행
+  workflow_dispatch:  # cron-job.org에서 트리거
 
 jobs:
   monitor:

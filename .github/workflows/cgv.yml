@@ -1,9 +1,7 @@
 name: CGV Stage Greeting Monitor
 
 on:
-  workflow_dispatch:  # 수동 실행
-  schedule:
-    - cron: '*/10 * * * *'  # 10분마다 실행
+  workflow_dispatch:  # cron-job.org에서 트리거
 
 jobs:
   monitor:
