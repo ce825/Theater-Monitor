@@ -59,7 +59,7 @@ def send_discord_notification(greeting):
         "embeds": [{
             "title": f"새로운 {event_type} 일정이 등록되었습니다!",
             "url": CGV_URL,
-            "color": 5814783,
+            "color": 0xED1C24,  # CGV 빨간색
             "fields": fields,
             "footer": {"text": f"CGV {event_type} 알림"},
             "timestamp": datetime.now(timezone.utc).isoformat()
