@@ -306,8 +306,9 @@ def check_stage_greetings():
                                         if (/^(전체|오전|오후|18시|심야|영화순|시간순|예매|CGV|2D|3D|IMAX|Laser|관$)/.test(line)) continue;
 
                                         // Detect movie title (Korean text, not time, not seat info)
+                                        var excludeWords = /^(더빙|자막|조조|매진|마감|예매종료|잔여|좌석|개봉|전체|오전|오후|심야|영화순|시간순|예매|일반|특별관|필름|디지털|재개봉|재상영|N차상영|기획전|영화제|시사회|쿠키|스페셜|한정|단독|독점|라이브뷰잉|응원상영|싱어롱|절찬|대개봉|개봉작|상영작|상영중|상영예정|CGV|2D|3D|IMAX|Laser|\d+관|DOLBY|ATMOS|SCREENX|4DX|리클라이너|아트하우스)$/;
                                         if (/^[가-힣]/.test(line) && !/^\d/.test(line) && !/석$/.test(line) && !/(무대인사|시네마톡|GV)/.test(line) && line.length >= 2 && line.length <= 30) {
-                                            if (!/^(\d+관|DOLBY|ATMOS|SCREENX|4DX|Laser|리클라이너)/.test(line)) {
+                                            if (!excludeWords.test(line)) {
                                                 // Save previous movie if it had events
                                                 if (currentMovie && currentTimes.length > 0) {
                                                     for (var t = 0; t < currentTimes.length; t++) {
