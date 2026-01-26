@@ -1,0 +1,45 @@
+name: Megabox Event Monitor
+
+on:
+  workflow_dispatch:  # 수동 실행
+  schedule:
+    - cron: '*/30 * * * *'  # 30분마다 실행
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Restore event cache
+        uses: actions/cache@v4
+        with:
+          path: megabox_events.json
+          key: megabox-events-${{ github.run_id }}
+          restore-keys: megabox-events-
+
+      - name: Run monitor
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: python megabox_monitor.py
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.MEGABOX_DISCORD_WEBHOOK_URL }}
+
+      - name: Save event cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: megabox_events.json
+          key: megabox-events-${{ github.run_id }}
