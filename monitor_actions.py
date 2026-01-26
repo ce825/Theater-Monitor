@@ -220,21 +220,41 @@ def check_stage_greetings():
                                     page.wait_for_timeout(500)
 
                                 # 날짜 클릭 시도
+                                date_disabled = False
                                 for pattern in patterns:
                                     if date_clicked:
                                         break
                                     try:
                                         locator = page.locator(pattern).first
                                         if locator.is_visible(timeout=1000):
-                                            is_disabled = locator.evaluate("el => el.disabled || el.className.includes('disabled')")
+                                            # disabled 체크 (부모 요소까지 확인)
+                                            is_disabled = locator.evaluate("""el => {
+                                                if (el.disabled || el.className.includes('disabled')) return true;
+                                                var parent = el.parentElement;
+                                                for (var i = 0; i < 3 && parent; i++) {
+                                                    if (parent.disabled || parent.className.includes('disabled')) return true;
+                                                    var style = window.getComputedStyle(parent);
+                                                    if (style.opacity < 0.5 || style.pointerEvents === 'none') return true;
+                                                    parent = parent.parentElement;
+                                                }
+                                                var myStyle = window.getComputedStyle(el);
+                                                if (myStyle.opacity < 0.5 || myStyle.pointerEvents === 'none') return true;
+                                                return false;
+                                            }""")
                                             if not is_disabled:
                                                 locator.click(timeout=3000)
                                                 date_clicked = True
                                                 print(f"    날짜 클릭: {day} {date_num}")
                                             else:
+                                                date_disabled = True
                                                 print(f"    날짜 비활성: {day} {date_num}")
                                     except:
                                         pass
+
+                                # 비활성 날짜는 스킵 (JS 클릭 시도하지 않음)
+                                if date_disabled:
+                                    print(f"    날짜 스킵(비활성): {day} {date_num}")
+                                    continue
 
                                 # JavaScript로 직접 클릭 시도
                                 if not date_clicked:
@@ -251,7 +271,19 @@ def check_stage_greetings():
                                             var text = (item.innerText || '').trim();
                                             if (text === day + '\\n' + datePadded ||
                                                 text === day + '\\n' + dateNum) {
-                                                if (!item.disabled && !item.className.includes('disabled')) {
+                                                // 비활성 상태 체크 (부모 포함)
+                                                var disabled = item.disabled || item.className.includes('disabled');
+                                                var parent = item.parentElement;
+                                                for (var j = 0; j < 3 && parent && !disabled; j++) {
+                                                    if (parent.disabled || parent.className.includes('disabled')) disabled = true;
+                                                    var style = window.getComputedStyle(parent);
+                                                    if (parseFloat(style.opacity) < 0.5 || style.pointerEvents === 'none') disabled = true;
+                                                    parent = parent.parentElement;
+                                                }
+                                                var myStyle = window.getComputedStyle(item);
+                                                if (parseFloat(myStyle.opacity) < 0.5 || myStyle.pointerEvents === 'none') disabled = true;
+
+                                                if (!disabled) {
                                                     item.click();
                                                     return {clicked: true, text: text, top: rect.top};
                                                 } else {
@@ -266,7 +298,8 @@ def check_stage_greetings():
                                         date_clicked = True
                                         print(f"    날짜 클릭(JS): {day} {date_num}")
                                     elif js_click.get("disabled"):
-                                        print(f"    날짜 비활성: {day} {date_num}")
+                                        print(f"    날짜 스킵(비활성): {day} {date_num}")
+                                        continue
 
                                 if not date_clicked:
                                     print(f"    날짜 스킵: {day} {date_num}")
