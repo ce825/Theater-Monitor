@@ -260,8 +260,8 @@ def main():
         return
 
     # 이벤트 상영 조회
-    print(f"[{datetime.now()}] 이벤트 상영 조회 중 (7일간)...")
-    current_events = fetch_events(branches, days=7)
+    print(f"[{datetime.now()}] 이벤트 상영 조회 중 (14일간)...")
+    current_events = fetch_events(branches, days=14)
     print(f"[{datetime.now()}] 발견된 이벤트: {len(current_events)}개")
 
     # 새로운 이벤트 찾기
