@@ -67,7 +67,7 @@ def save_events(events):
 
 
 def get_all_cinemas():
-    """전체 영화관 목록 가져오기"""
+    """서울/경기 영화관 목록 가져오기"""
     data = {
         "paramList": json.dumps({
             "MethodName": "GetCinemaItems",
@@ -83,8 +83,10 @@ def get_all_cinemas():
 
         if result.get("IsOK") == "true":
             cinemas = result.get("Cinemas", {}).get("Items", [])
-            # 국내 영화관만 (DivisionCode=1)
-            return [c for c in cinemas if c.get("DivisionCode") == 1]
+            # 국내 영화관 중 서울/경기만 필터링
+            return [c for c in cinemas
+                    if c.get("DivisionCode") == 1
+                    and c.get("CinemaNameKR") in SEOUL_GYEONGGI_CINEMAS]
     except Exception as e:
         print(f"[{datetime.now()}] 영화관 목록 조회 실패: {e}")
 

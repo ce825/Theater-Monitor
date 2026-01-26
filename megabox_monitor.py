@@ -70,7 +70,7 @@ def is_event_show(movie_name, event_div_cd=None, ctts_ty_div_cd=None):
 
 
 def get_all_branches():
-    """전체 지점 목록 가져오기"""
+    """서울/경기 지점 목록 가져오기"""
     data = {
         "arrMovieNo": "",
         "playDe": datetime.now().strftime("%Y%m%d"),
@@ -88,11 +88,13 @@ def get_all_branches():
 
         branches = []
         for area in result.get("areaBrchList", []):
-            branches.append({
-                "brchNo": area.get("brchNo"),
-                "brchNm": area.get("brchNm"),
-                "areaCdNm": area.get("areaCdNm")
-            })
+            # 서울/경기 지역만 필터링
+            if area.get("areaCdNm") in TARGET_REGIONS:
+                branches.append({
+                    "brchNo": area.get("brchNo"),
+                    "brchNm": area.get("brchNm"),
+                    "areaCdNm": area.get("areaCdNm")
+                })
 
         return branches
     except Exception as e:
