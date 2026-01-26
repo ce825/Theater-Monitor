@@ -19,6 +19,9 @@ DISCORD_WEBHOOK_URL = os.environ.get(
 )
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "megabox_events.json")
 
+# 알림 대상 지역 (서울/경기만)
+TARGET_REGIONS = ["서울", "경기"]
+
 # 이벤트 키워드
 EVENT_KEYWORDS = [
     "무대인사", "GV", "관객과의대화", "관객과의 대화",
@@ -272,11 +275,12 @@ def main():
 
     print(f"[{datetime.now()}] 새로운 이벤트: {len(new_events)}개")
 
-    # 새 이벤트 알림 보내기
+    # 새 이벤트 알림 보내기 (서울/경기 지역만)
     if not is_first_run and new_events:
         for event in new_events:
-            send_discord_notification(event)
-            time.sleep(0.5)  # Discord rate limit 방지
+            if event.get("areaCdNm") in TARGET_REGIONS:
+                send_discord_notification(event)
+                time.sleep(0.5)  # Discord rate limit 방지
 
     # 이벤트 저장 (기존 + 새로운)
     saved_events.update(current_events)

@@ -37,6 +37,20 @@ EVENT_CODES = {
     230: "스페셜상영회",
 }
 
+# 서울/경기 지역 영화관 (알림 대상)
+SEOUL_GYEONGGI_CINEMAS = [
+    # 서울
+    "가산디지털", "가양", "강동", "건대입구", "김포공항", "노원", "도곡", "독산",
+    "서울대입구", "수락산", "신도림", "신림", "에비뉴엘", "영등포", "용산", "월드타워",
+    "은평", "청량리", "합정", "홍대입구", "중랑", "천호", "신대방", "구로",
+    # 경기
+    "광명", "광명아울렛", "구리", "동탄", "라페스타", "마석", "부천", "부천역",
+    "분당", "산본", "성남", "수원", "시화", "안산", "안성", "안양", "안양일번가",
+    "야탑", "오산", "용인", "의정부", "의정부민락", "일산", "죽전", "판교",
+    "파주아울렛", "평택", "평촌", "하남미사", "화정", "수지", "동수원", "광교",
+    "인덕원", "범계", "기흥", "김포", "고양스타필드", "위례", "동탄역",
+]
+
 
 def load_saved_events():
     """저장된 이벤트 목록 불러오기"""
@@ -239,11 +253,12 @@ def main():
 
     print(f"[{datetime.now()}] 새로운 이벤트: {len(new_events)}개")
 
-    # 새 이벤트 알림 보내기
+    # 새 이벤트 알림 보내기 (서울/경기 지역만)
     if not is_first_run and new_events:
         for event in new_events:
-            send_discord_notification(event)
-            time.sleep(0.5)  # Discord rate limit 방지
+            if event.get("cinemaName") in SEOUL_GYEONGGI_CINEMAS:
+                send_discord_notification(event)
+                time.sleep(0.5)  # Discord rate limit 방지
 
     # 이벤트 저장 (기존 + 새로운)
     saved_events.update(current_events)
