@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 설정
 DISCORD_WEBHOOK_URL = os.environ.get(
     "DISCORD_WEBHOOK_URL",
-    "https://discord.com/api/webhooks/1465405351108153425/vWY6nTRfFs3fKJyx3EM2SrwmKjnWQaySkHcCvDi2vxrwSEDFhf5t34I37qUX4Bz31c3E"
+    "https://discord.com/api/webhooks/1465410522424934451/VsOivK4NUqeDW4TzNBogspvPPZXC-B6MbA_3V-objWYt0kymcez8kYyvkivtOaMqBBdi"
 )
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lotte_events.json")
 
