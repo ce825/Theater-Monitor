@@ -31,7 +31,7 @@ jobs:
       - name: Run monitor
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python monitor_actions.py
+        run: python cgv_monitor_actions.py
 
       - name: Upload debug screenshot
         uses: actions/upload-artifact@v4
