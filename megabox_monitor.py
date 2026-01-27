@@ -201,8 +201,8 @@ def send_discord_notification(event):
     # 이벤트 타입 표시
     event_type = event.get("eventDivCdNm") or ", ".join(event.get("matchedKeywords", [])) or "특별상영"
 
-    # 예매 URL
-    booking_url = f"https://www.megabox.co.kr/booking?brchNo={event['brchNo']}&playDe={event['playDe']}&movieNo={event['movieNo']}"
+    # 예매 URL (모바일 - 앱으로 열림)
+    booking_url = f"http://m.megabox.co.kr/booking?brchNo={event['brchNo']}&playDe={event['playDe']}&movieNo={event['movieNo']}"
 
     embed = {
         "embeds": [
