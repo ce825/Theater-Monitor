@@ -7,6 +7,8 @@ CGV 무대인사 모니터링 스크립트
 import json
 import os
 import re
+import random
+import time
 import requests
 from datetime import datetime
 from playwright.sync_api import sync_playwright
@@ -84,6 +86,8 @@ def check_stage_greetings():
             context = browser.new_context()
             page = context.new_page()
 
+            is_first_theater = True
+
             # 각 극장별로 확인
             for region, theater in TARGET_THEATERS:
                 print(f"\n{'='*50}")
@@ -91,23 +95,43 @@ def check_stage_greetings():
                 print('='*50)
 
                 try:
-                    # 1. CGV 예매 페이지 이동
-                    page.goto(CGV_URL, timeout=60000)
-                    page.wait_for_timeout(4000)
+                    # 1. 첫 극장만 URL 이동, 이후는 페이지 재사용
+                    if is_first_theater:
+                        page.goto(CGV_URL, timeout=60000)
+                        # 페이지 로드 대기 (극장 선택 버튼이 나타날 때까지)
+                        page.wait_for_selector("text=극장을 선택해 주세요", timeout=10000)
+                        page.wait_for_timeout(1000)
+                        is_first_theater = False
 
                     # 2. 극장 선택 팝업 열기
-                    page.click("text=극장을 선택해 주세요", timeout=5000)
-                    page.wait_for_timeout(2000)
+                    popup_opened = False
+                    try:
+                        page.click("text=극장을 선택해 주세요", timeout=2000)
+                        popup_opened = True
+                    except:
+                        # 이미 극장이 선택된 상태 - 페이지 새로고침 후 다시 시도
+                        page.goto(CGV_URL, timeout=60000)
+                        page.wait_for_selector("text=극장을 선택해 주세요", timeout=10000)
+                        page.wait_for_timeout(1000)
+                        page.click("text=극장을 선택해 주세요", timeout=5000)
+                        popup_opened = True
+                    page.wait_for_timeout(800)
 
-                    # 3. 지역 클릭 (숫자가 포함된 형태: 서울(29))
+                    # 3. 로딩 오버레이 사라질 때까지 대기
+                    try:
+                        page.wait_for_selector(".loading_pageContainer__fvLY_", state="hidden", timeout=5000)
+                    except:
+                        pass
+
+                    # 4. 지역 클릭 (숫자가 포함된 형태: 서울(29))
                     page.click(f"text=/{region}\\(\\d+\\)/", timeout=5000)
-                    page.wait_for_timeout(1500)
+                    page.wait_for_timeout(500)
 
-                    # 4. 극장 클릭
+                    # 5. 극장 클릭
                     page.click(f"text={theater}", timeout=5000)
-                    page.wait_for_timeout(1500)
+                    page.wait_for_timeout(500)
 
-                    # 5. 극장선택 버튼 클릭
+                    # 6. 극장선택 버튼 클릭
                     page.evaluate('''() => {
                         const elements = document.querySelectorAll('button, a, div, span');
                         for (const el of elements) {
@@ -119,10 +143,11 @@ def check_stage_greetings():
                         }
                         return false;
                     }''')
-                    page.wait_for_timeout(4000)
+                    # 날짜 캘린더가 로드될 때까지 대기
+                    page.wait_for_timeout(1500)
                     print(f"  극장 선택 완료")
 
-                    # 6. 모든 주말 날짜 확인 (화살표 클릭으로 날짜 범위 확장)
+                    # 7. 모든 주말 날짜 확인 (화살표 클릭으로 날짜 범위 확장)
                     checked_dates = set()  # 이미 확인한 날짜 추적
                     max_arrow_clicks = 10  # 최대 화살표 클릭 횟수 (무한 루프 방지)
                     arrow_clicks = 0
@@ -207,7 +232,7 @@ def check_stage_greetings():
                                 }""", {"day": day, "dateNum": date_num, "datePadded": date_padded})
 
                                 if scroll_result.get("found"):
-                                    page.wait_for_timeout(500)
+                                    page.wait_for_timeout(200)
 
                                 # 날짜 클릭 시도
                                 date_disabled = False
@@ -294,17 +319,17 @@ def check_stage_greetings():
                                 if not date_clicked:
                                     print(f"    날짜 스킵: {day} {date_num}")
                                     continue
-                                page.wait_for_timeout(3000)
+                                page.wait_for_timeout(1200)
 
                                 # 페이지 스크롤하여 모든 영화 로드 (lazy loading 대응)
                                 page.evaluate("""() => {
                                     window.scrollTo(0, document.body.scrollHeight);
                                 }""")
-                                page.wait_for_timeout(1500)
+                                page.wait_for_timeout(600)
                                 page.evaluate("""() => {
                                     window.scrollTo(0, 0);
                                 }""")
-                                page.wait_for_timeout(1000)
+                                page.wait_for_timeout(400)
 
                                 # 상영 시간표에서 영화별 무대인사/GV/시네마톡 추출
                                 movie_events = page.evaluate("""() => {
@@ -453,7 +478,7 @@ def check_stage_greetings():
 
                         arrow_clicks += 1
                         print(f"  → 다음 날짜 범위로 이동 ({arrow_clicks})")
-                        page.wait_for_timeout(2000)
+                        page.wait_for_timeout(800)
 
                 except Exception as e:
                     print(f"  [{theater}] 오류: {e}")
@@ -598,6 +623,11 @@ def check_stage_greetings_old():
 
 
 def main():
+    # 랜덤 딜레이 (0~60초) - 봇 패턴 회피
+    delay = random.randint(0, 60)
+    print(f"[{datetime.now()}] 랜덤 딜레이: {delay}초")
+    time.sleep(delay)
+
     print(f"[{datetime.now()}] CGV 주말 무대인사 모니터링 시작...")
 
     saved_data = load_saved_data()
