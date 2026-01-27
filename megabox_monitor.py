@@ -7,6 +7,7 @@
 import requests
 import json
 import os
+import random
 from datetime import datetime, timezone, timedelta
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -245,6 +246,11 @@ def send_discord_notification(event):
 
 
 def main():
+    # 랜덤 딜레이 (0~30초) - 봇 패턴 회피
+    delay = random.randint(0, 30)
+    print(f"[{datetime.now()}] 랜덤 딜레이: {delay}초")
+    time.sleep(delay)
+
     print(f"[{datetime.now()}] 메가박스 이벤트 모니터링 시작...")
     start_time = time.time()
 
