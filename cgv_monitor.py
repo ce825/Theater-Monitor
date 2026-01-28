@@ -387,16 +387,9 @@ def check_stage_greetings():
                                                     eventType = '시네마톡';
                                                     break;
                                                 }
-                                                // GV 감지: 정확히 "GV"만 있거나, "GV+"로 시작하는 경우만 (CGV 제외)
-                                                // 라인이 짧아야 함 (태그 형태)
-                                                if (checkLine.length <= 10 && checkLine.indexOf('CGV') === -1) {
-                                                    var trimmed = checkLine.trim();
-                                                    if (trimmed === 'GV' || trimmed.startsWith('GV ') || trimmed.startsWith('GV+')) {
-                                                        hasEvent = true;
-                                                        eventType = 'GV';
-                                                        break;
-                                                    }
-                                                }
+                                                // GV 감지 비활성화 - CGV 페이지에서 오탐지가 너무 많음
+                                                // 실제 GV 이벤트는 대부분 "시네마톡"이나 "무대인사"로 표시됨
+                                                // if (checkLine.trim() === 'GV') { ... }
                                                 // Stop if we hit another time or movie
                                                 if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
                                             }
