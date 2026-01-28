@@ -1,0 +1,65 @@
+{
+  "1371_20260128_09:20_25104301": {
+    "id": "1371_20260128_09:20_25104301",
+    "playSchdlNo": "2601281371006",
+    "movieNo": "25104301",
+    "movieNm": "한스 짐머 시네마 콘서트",
+    "brchNo": "1371",
+    "brchNm": "센트럴",
+    "areaCdNm": "서울",
+    "playDe": "20260128",
+    "playStartTime": "09:20",
+    "playEndTime": "11:43",
+    "theabExpoNm": "부티크 101호 [맛있는영화]관",
+    "eventDivCdNm": null,
+    "restSeatCnt": 87,
+    "totSeatCnt": 92,
+    "bokdAbleAt": "Y",
+    "matchedKeywords": [
+      "콘서트"
+    ],
+    "moviePosterImg": "/SharedImg/2025/12/26/ll7PRTDPkaLAltKA4rGw48oBsjYcKjJ4_150.jpg"
+  },
+  "0073_20260127_19:40_25099202": {
+    "id": "0073_20260127_19:40_25099202",
+    "playSchdlNo": "2601270073008",
+    "movieNo": "25099202",
+    "movieNm": "[응원상영] 아이돌리쉬 세븐 퍼스트 비트! 극장총집편 후편",
+    "brchNo": "0073",
+    "brchNm": "동대문",
+    "areaCdNm": "서울",
+    "playDe": "20260127",
+    "playStartTime": "19:40",
+    "playEndTime": "21:38",
+    "theabExpoNm": "컴포트 2관&#40;리클라이너LASER&#41;",
+    "eventDivCdNm": null,
+    "restSeatCnt": 70,
+    "totSeatCnt": 72,
+    "bokdAbleAt": "Y",
+    "matchedKeywords": [
+      "응원상영"
+    ],
+    "moviePosterImg": "/SharedImg/2025/11/24/CumwwGp3dexhFBTf8Wg6TN45lZuiy42u_150.jpg"
+  },
+  "0073_20260128_14:40_25099202": {
+    "id": "0073_20260128_14:40_25099202",
+    "playSchdlNo": "2601280073041",
+    "movieNo": "25099202",
+    "movieNm": "[응원상영] 아이돌리쉬 세븐 퍼스트 비트! 극장총집편 후편",
+    "brchNo": "0073",
+    "brchNm": "동대문",
+    "areaCdNm": "서울",
+    "playDe": "20260128",
+    "playStartTime": "14:40",
+    "playEndTime": "16:38",
+    "theabExpoNm": "컴포트 2관&#40;리클라이너LASER&#41;",
+    "eventDivCdNm": null,
+    "restSeatCnt": 72,
+    "totSeatCnt": 72,
+    "bokdAbleAt": "Y",
+    "matchedKeywords": [
+      "응원상영"
+    ],
+    "moviePosterImg": "/SharedImg/2025/11/24/CumwwGp3dexhFBTf8Wg6TN45lZuiy42u_150.jpg"
+  }
+}

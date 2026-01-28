@@ -387,10 +387,15 @@ def check_stage_greetings():
                                                     eventType = '시네마톡';
                                                     break;
                                                 }
-                                                if (/(?<!C)GV(?!C)/.test(checkLine) && checkLine.indexOf('CGV') === -1) {
-                                                    hasEvent = true;
-                                                    eventType = 'GV';
-                                                    break;
+                                                // GV 감지: 정확히 "GV"만 있거나, "GV+"로 시작하는 경우만 (CGV 제외)
+                                                // 라인이 짧아야 함 (태그 형태)
+                                                if (checkLine.length <= 10 && checkLine.indexOf('CGV') === -1) {
+                                                    var trimmed = checkLine.trim();
+                                                    if (trimmed === 'GV' || trimmed.startsWith('GV ') || trimmed.startsWith('GV+')) {
+                                                        hasEvent = true;
+                                                        eventType = 'GV';
+                                                        break;
+                                                    }
                                                 }
                                                 // Stop if we hit another time or movie
                                                 if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
