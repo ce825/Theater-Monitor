@@ -403,6 +403,11 @@ def check_stage_greetings():
                                                     eventType = 'GV';
                                                     break;
                                                 }
+                                                if (checkLine.indexOf('굿즈') !== -1) {
+                                                    hasEvent = true;
+                                                    eventType = '굿즈';
+                                                    break;
+                                                }
                                                 // Stop if we hit another time or movie
                                                 if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
                                             }
