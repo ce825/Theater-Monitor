@@ -153,18 +153,27 @@ def check_stage_greetings():
                     arrow_clicks = 0
 
                     while arrow_clicks <= max_arrow_clicks:
-                        # 페이지 전체 텍스트에서 주말 날짜 찾기
-                        page_text = page.inner_text("body")
-                        weekend_dates = []
+                        # JavaScript로 캘린더에서 직접 주말 날짜 추출 (오탐지 방지)
+                        weekend_dates = page.evaluate("""() => {
+                            var results = [];
+                            // 캘린더 영역 상단 350px 이내의 요소만 검색
+                            var elements = document.querySelectorAll('li, button, div, span, a');
+                            for (var i = 0; i < elements.length; i++) {
+                                var el = elements[i];
+                                var rect = el.getBoundingClientRect();
+                                // 캘린더는 상단에 위치 (y: 50~350)
+                                if (rect.top < 50 || rect.top > 350) continue;
+                                if (rect.height < 10 || rect.height > 80) continue;
 
-                        # "토\n숫자" 또는 "일\n숫자" 패턴 찾기 (2자리 숫자 우선)
-                        import re
-                        for match in re.finditer(r'토\s*\n?\s*(\d{1,2})', page_text):
-                            date_num = match.group(1).lstrip('0') or '0'  # 앞의 0 제거
-                            weekend_dates.append({"day": "토", "date": date_num})
-                        for match in re.finditer(r'일\s*\n?\s*(\d{1,2})', page_text):
-                            date_num = match.group(1).lstrip('0') or '0'
-                            weekend_dates.append({"day": "일", "date": date_num})
+                                var text = (el.innerText || '').trim();
+                                // "토\n숫자" 또는 "일\n숫자" 패턴만 매칭
+                                var match = text.match(/^(토|일)\n(\d{1,2})$/);
+                                if (match) {
+                                    results.push({day: match[1], date: match[2].replace(/^0/, '') || '0'});
+                                }
+                            }
+                            return results;
+                        }""")
 
                         # 중복 제거 및 정렬 (날짜순)
                         seen = set()
@@ -174,7 +183,6 @@ def check_stage_greetings():
                             if key not in seen:
                                 seen.add(key)
                                 unique_dates.append(d)
-                        # 날짜 숫자로 정렬
                         weekend_dates = sorted(unique_dates, key=lambda x: int(x['date']))
 
                         found_dates = [d['day'] + d['date'] for d in weekend_dates]
