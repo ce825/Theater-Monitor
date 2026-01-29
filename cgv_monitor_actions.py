@@ -184,7 +184,6 @@ def check_stage_greetings():
                                 if (rect.height < 10 || rect.height > 80) continue;
 
                                 var text = (el.innerText || '').trim();
-                                // "토\n숫자" 또는 "일\n숫자" 패턴만 매칭
                                 var match = text.match(/^(토|일)\\n(\\d{1,2})$/);
                                 if (match) {
                                     results.push({day: match[1], date: match[2].replace(/^0/, '') || '0'});
