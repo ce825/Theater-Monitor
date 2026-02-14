@@ -40,12 +40,32 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def send_discord_notification(greeting):
+def send_discord_notification(greeting, notification_type="new"):
+    """
+    notification_type:
+      - "new": 새로운 이벤트 등록
+      - "preparing": 예매 준비중 상태 감지
+      - "sales_started": 예매 시작 (준비중 → 예매 가능)
+    """
     if not DISCORD_WEBHOOK_URL:
         print("Discord webhook URL not set")
         return
 
     event_type = greeting.get("event_type", "무대인사")
+
+    # 알림 유형별 설정
+    if notification_type == "preparing":
+        title = f"⏳ {event_type} 예매 준비중!"
+        color = 0xFFA500  # 주황색
+        footer_text = f"CGV {event_type} - 예매 준비중"
+    elif notification_type == "sales_started":
+        title = f"🎟️ {event_type} 예매 오픈!"
+        color = 0x00FF00  # 초록색
+        footer_text = f"CGV {event_type} - 예매 시작"
+    else:
+        title = f"🆕 새로운 {event_type} 일정 등록!"
+        color = 0xED1C24  # CGV 빨간색
+        footer_text = f"CGV {event_type} 알림"
 
     fields = [
         {"name": "🎬 영화", "value": greeting.get("movie", "미정"), "inline": False},
@@ -59,11 +79,11 @@ def send_discord_notification(greeting):
 
     embed = {
         "embeds": [{
-            "title": f"새로운 {event_type} 일정이 등록되었습니다!",
+            "title": title,
             "url": CGV_URL,
-            "color": 0xED1C24,  # CGV 빨간색
+            "color": color,
             "fields": fields,
-            "footer": {"text": f"CGV {event_type} 알림"},
+            "footer": {"text": footer_text},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }]
     }
@@ -71,7 +91,8 @@ def send_discord_notification(greeting):
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=10)
         if response.status_code == 204:
-            print(f"  알림 전송: {greeting['movie']} - {greeting['theater']} {greeting['date']} {greeting['time']}")
+            status_msg = {"preparing": "예매준비중", "sales_started": "예매오픈", "new": "신규"}
+            print(f"  알림 전송 [{status_msg.get(notification_type, 'new')}]: {greeting['movie']} - {greeting['theater']} {greeting['date']} {greeting['time']}")
     except Exception as e:
         print(f"  Discord 오류: {e}")
 
@@ -381,7 +402,7 @@ def check_stage_greetings():
                                                 // Save previous movie if it had events
                                                 if (currentMovie && currentTimes.length > 0) {
                                                     for (var t = 0; t < currentTimes.length; t++) {
-                                                        results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType});
+                                                        results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType, preparing: currentTimes[t].preparing || false});
                                                     }
                                                 }
                                                 currentMovie = line;
@@ -393,20 +414,22 @@ def check_stage_greetings():
                                         var timeMatch = line.match(/^(\d{1,2}:\d{2})/);
                                         if (timeMatch && currentMovie) {
                                             var timeStr = timeMatch[1];
-                                            // Check next few lines for event tags
+                                            // Check next few lines for event tags and status
                                             var hasEvent = false;
                                             var eventType = '';
+                                            var isPreparing = false;
                                             for (var j = i; j < Math.min(i + 5, lines.length); j++) {
                                                 var checkLine = lines[j];
+                                                if (checkLine.indexOf('예매 준비중') !== -1 || checkLine.indexOf('예매준비중') !== -1) {
+                                                    isPreparing = true;
+                                                }
                                                 if (checkLine.indexOf('무대인사') !== -1) {
                                                     hasEvent = true;
                                                     eventType = '무대인사';
-                                                    break;
                                                 }
                                                 if (checkLine.indexOf('시네마톡') !== -1) {
                                                     hasEvent = true;
                                                     eventType = '시네마톡';
-                                                    break;
                                                 }
                                                 // GV 감지 비활성화 - CGV 페이지에서 오탐지가 너무 많음
                                                 // 실제 GV 이벤트는 대부분 "시네마톡"이나 "무대인사"로 표시됨
@@ -414,13 +437,12 @@ def check_stage_greetings():
                                                 if (checkLine.indexOf('굿즈') !== -1) {
                                                     hasEvent = true;
                                                     eventType = '굿즈';
-                                                    break;
                                                 }
                                                 // Stop if we hit another time or movie
                                                 if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
                                             }
                                             if (hasEvent) {
-                                                currentTimes.push({time: timeStr, eventType: eventType});
+                                                currentTimes.push({time: timeStr, eventType: eventType, preparing: isPreparing});
                                             }
                                         }
                                     }
@@ -428,7 +450,7 @@ def check_stage_greetings():
                                     // Don't forget last movie
                                     if (currentMovie && currentTimes.length > 0) {
                                         for (var t = 0; t < currentTimes.length; t++) {
-                                            results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType});
+                                            results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType, preparing: currentTimes[t].preparing || false});
                                         }
                                     }
 
@@ -459,11 +481,13 @@ def check_stage_greetings():
                                         movie_name = event.get("movie", "미정")
                                         time_str = event.get("time", "")
                                         event_type = event.get("eventType", "무대인사")
+                                        is_preparing = event.get("preparing", False)
 
                                         greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_name[:10]}"
 
                                         if greeting_id not in [x["id"] for x in all_greetings]:
-                                            print(f"    - [{event_type}] {movie_name} {time_str}")
+                                            status_str = " [예매준비중]" if is_preparing else ""
+                                            print(f"    - [{event_type}] {movie_name} {time_str}{status_str}")
                                             g = {
                                                 "movie": movie_name,
                                                 "theater": f"CGV {theater}",
@@ -471,7 +495,8 @@ def check_stage_greetings():
                                                 "time": time_str,
                                                 "hall": "",
                                                 "event_type": event_type,
-                                                "id": greeting_id
+                                                "id": greeting_id,
+                                                "preparing": is_preparing
                                             }
                                             all_greetings.append(g)
                                 else:
@@ -552,13 +577,48 @@ def main():
             }, timeout=10)
         return
 
-    new_greetings = [g for g in greetings if g.get("id") and g["id"] not in saved_ids]
+    # 기존 이벤트를 ID로 매핑
+    saved_by_id = {g.get("id"): g for g in saved_data.get("greetings", []) if g.get("id")}
 
+    new_greetings = []
+    preparing_greetings = []  # 새로 감지된 예매 준비중
+    sales_started_greetings = []  # 예매 준비중 → 예매 시작
+
+    for g in greetings:
+        gid = g.get("id")
+        if not gid:
+            continue
+
+        if gid not in saved_ids:
+            # 새로운 이벤트
+            new_greetings.append(g)
+            if g.get("preparing"):
+                preparing_greetings.append(g)
+        else:
+            # 기존 이벤트 - 상태 변경 확인
+            old_g = saved_by_id.get(gid)
+            if old_g and old_g.get("preparing") and not g.get("preparing"):
+                # 예매 준비중 → 예매 시작
+                sales_started_greetings.append(g)
+                # 기존 데이터 업데이트
+                old_g["preparing"] = False
+
+    # 알림 전송
     if new_greetings:
         print(f"새 이벤트 {len(new_greetings)}개!")
         for g in new_greetings:
-            send_discord_notification(g)
+            if g.get("preparing"):
+                send_discord_notification(g, "preparing")
+            else:
+                send_discord_notification(g, "new")
         saved_data["greetings"].extend(new_greetings)
+
+    if sales_started_greetings:
+        print(f"예매 오픈 {len(sales_started_greetings)}개!")
+        for g in sales_started_greetings:
+            send_discord_notification(g, "sales_started")
+
+    if new_greetings or sales_started_greetings:
         save_data(saved_data)
     else:
         print("새 이벤트 없음")
