@@ -72,6 +72,7 @@ def send_discord_notification(greeting, notification_type="new"):
       - "new": 새로운 이벤트 등록
       - "preparing": 예매 준비중 상태 감지
       - "sales_started": 예매 시작 (준비중 → 예매 가능)
+      - "reopened": 매진 → 예매 가능 (취소표 발생)
     """
     from datetime import timezone
     event_type = greeting.get("event_type", "무대인사")
@@ -85,6 +86,10 @@ def send_discord_notification(greeting, notification_type="new"):
         title = f"🎟️ {event_type} 예매 오픈!"
         color = 0x00FF00  # 초록색
         footer_text = f"CGV {event_type} - 예매 시작"
+    elif notification_type == "reopened":
+        title = f"🔄 {event_type} 취소표 발생!"
+        color = 0x9932CC  # 보라색
+        footer_text = f"CGV {event_type} - 매진 → 예매 가능"
     else:
         title = f"🆕 새로운 {event_type} 일정 등록!"
         color = 0xED1C24  # CGV 빨간색
@@ -114,7 +119,7 @@ def send_discord_notification(greeting, notification_type="new"):
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=10)
         if response.status_code == 204:
-            status_msg = {"preparing": "예매준비중", "sales_started": "예매오픈", "new": "신규"}
+            status_msg = {"preparing": "예매준비중", "sales_started": "예매오픈", "reopened": "취소표", "new": "신규"}
             print(f"  알림 전송 [{status_msg.get(notification_type, 'new')}]: {greeting['movie']} - {greeting['theater']} {greeting['date']} {greeting['time']}")
     except Exception as e:
         print(f"  Discord 오류: {e}")
@@ -481,6 +486,12 @@ def check_stage_greetings():
                                             isPreparing = true;
                                         }
 
+                                        // 매진 상태 확인
+                                        var isSoldOut = false;
+                                        if (blockText.indexOf('매진') !== -1 || blockText.indexOf('마감') !== -1) {
+                                            isSoldOut = true;
+                                        }
+
                                         if (!hasEvent) continue;
 
                                         // 영화 제목 찾기 - 상위 요소에서 검색
@@ -521,7 +532,8 @@ def check_stage_greetings():
                                                     movie: movieName,
                                                     time: timeStr,
                                                     eventType: eventType,
-                                                    preparing: isPreparing
+                                                    preparing: isPreparing,
+                                                    soldOut: isSoldOut
                                                 });
                                             }
                                         }
@@ -555,11 +567,12 @@ def check_stage_greetings():
                                         time_str = event.get("time", "")
                                         event_type = event.get("eventType", "무대인사")
                                         is_preparing = event.get("preparing", False)
+                                        is_sold_out = event.get("soldOut", False)
 
                                         greeting_id = f"{theater}_{current_year}_{current_month}_{date_num}_{time_str}_{movie_name[:10]}"
 
                                         if greeting_id not in [x["id"] for x in all_greetings]:
-                                            status_str = " [예매준비중]" if is_preparing else ""
+                                            status_str = " [예매준비중]" if is_preparing else (" [매진]" if is_sold_out else "")
                                             print(f"    - [{event_type}] {movie_name} {time_str}{status_str}")
                                             g = {
                                                 "movie": movie_name,
@@ -569,7 +582,8 @@ def check_stage_greetings():
                                                 "hall": "",
                                                 "event_type": event_type,
                                                 "id": greeting_id,
-                                                "preparing": is_preparing
+                                                "preparing": is_preparing,
+                                                "sold_out": is_sold_out
                                             }
                                             all_greetings.append(g)
                                 else:
@@ -783,6 +797,7 @@ def main():
     new_greetings = []
     preparing_greetings = []  # 새로 감지된 예매 준비중
     sales_started_greetings = []  # 예매 준비중 → 예매 시작
+    reopened_greetings = []  # 매진 → 예매 가능 (취소표)
 
     for g in greetings:
         gid = g.get("id")
@@ -797,11 +812,20 @@ def main():
         else:
             # 기존 이벤트 - 상태 변경 확인
             old_g = saved_by_id.get(gid)
-            if old_g and old_g.get("preparing") and not g.get("preparing"):
+            if old_g:
                 # 예매 준비중 → 예매 시작
-                sales_started_greetings.append(g)
-                # 기존 데이터 업데이트
-                old_g["preparing"] = False
+                if old_g.get("preparing") and not g.get("preparing"):
+                    sales_started_greetings.append(g)
+                    old_g["preparing"] = False
+
+                # 매진 → 예매 가능 (취소표 발생)
+                if old_g.get("sold_out") and not g.get("sold_out"):
+                    reopened_greetings.append(g)
+                    old_g["sold_out"] = False
+
+                # 예매 가능 → 매진 (상태 업데이트만, 알림 없음)
+                if not old_g.get("sold_out") and g.get("sold_out"):
+                    old_g["sold_out"] = True
 
     # 알림 전송
     if new_greetings:
@@ -818,7 +842,12 @@ def main():
         for g in sales_started_greetings:
             send_discord_notification(g, "sales_started")
 
-    if new_greetings or sales_started_greetings:
+    if reopened_greetings:
+        print(f"[{datetime.now()}] 취소표 발생 {len(reopened_greetings)}개!")
+        for g in reopened_greetings:
+            send_discord_notification(g, "reopened")
+
+    if new_greetings or sales_started_greetings or reopened_greetings:
         save_data(saved_data)
     else:
         print(f"[{datetime.now()}] 새 무대인사 없음")
