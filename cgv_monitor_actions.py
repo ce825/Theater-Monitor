@@ -410,84 +410,90 @@ def check_stage_greetings():
                                 }""")
                                 page.wait_for_timeout(400)
 
-                                # 상영 시간표에서 영화별 무대인사/GV/시네마톡 추출
+                                # 상영 시간표에서 영화별 무대인사/GV/시네마톡 추출 (스케줄 영역만 정확하게 파싱)
                                 movie_events = page.evaluate("""() => {
                                     var results = [];
-                                    var movieSections = document.querySelectorAll('[class*="movie"], [class*="Movie"], .time-table-wrap, .sect-showtimes');
 
-                                    if (movieSections.length === 0) {
-                                        movieSections = document.querySelectorAll('body > div');
-                                    }
+                                    // 방법 1: 시간 블록에서 직접 무대인사 태그 찾기 (가장 정확)
+                                    var timeBlocks = document.querySelectorAll('[class*="time"], [class*="schedule"], [class*="showtime"], li');
 
-                                    var bodyText = document.body.innerText;
-                                    var lines = bodyText.split('\\n');
-                                    var currentMovie = '';
-                                    var currentTimes = [];
-                                    var inTimeSection = false;
+                                    for (var i = 0; i < timeBlocks.length; i++) {
+                                        var block = timeBlocks[i];
+                                        var blockText = block.innerText || '';
+                                        var rect = block.getBoundingClientRect();
 
-                                    for (var i = 0; i < lines.length; i++) {
-                                        var line = lines[i].trim();
+                                        // 화면 하단의 스케줄 영역만 확인 (y > 400)
+                                        if (rect.top < 400) continue;
 
-                                        // Skip empty lines and common UI elements
-                                        if (!line || line.length < 2) continue;
-                                        if (/^(전체|오전|오후|18시|심야|영화순|시간순|예매|CGV|2D|3D|IMAX|Laser|관$)/.test(line)) continue;
+                                        // 시간 패턴 확인 (HH:MM)
+                                        var timeMatch = blockText.match(/(\d{1,2}:\d{2})/);
+                                        if (!timeMatch) continue;
 
-                                        // Detect movie title (Korean text, not time, not seat info)
-                                        var excludeWords = /^(더빙|자막|조조|매진|마감|예매종료|잔여|좌석|개봉|전체|오전|오후|심야|영화순|시간순|예매|일반|특별관|필름|디지털|재개봉|재상영|N차상영|기획전|영화제|시사회|쿠키|스페셜|한정|단독|독점|라이브뷰잉|응원상영|싱어롱|절찬|대개봉|개봉작|상영작|상영중|상영예정|CGV|2D|3D|IMAX|Laser|\d+관|DOLBY|ATMOS|SCREENX|4DX|리클라이너|아트하우스)$/;
-                                        if (/^[가-힣]/.test(line) && !/^\d/.test(line) && !/석$/.test(line) && !/(무대인사|시네마톡|GV)/.test(line) && line.length >= 2 && line.length <= 30) {
-                                            if (!excludeWords.test(line)) {
-                                                // Save previous movie if it had events
-                                                if (currentMovie && currentTimes.length > 0) {
-                                                    for (var t = 0; t < currentTimes.length; t++) {
-                                                        results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType, preparing: currentTimes[t].preparing || false});
-                                                    }
-                                                }
-                                                currentMovie = line;
-                                                currentTimes = [];
-                                            }
+                                        var timeStr = timeMatch[1];
+
+                                        // 같은 블록 내에서 이벤트 태그 확인
+                                        var hasEvent = false;
+                                        var eventType = '';
+                                        var isPreparing = false;
+
+                                        if (blockText.indexOf('무대인사') !== -1) {
+                                            hasEvent = true;
+                                            eventType = '무대인사';
+                                        }
+                                        if (blockText.indexOf('시네마톡') !== -1) {
+                                            hasEvent = true;
+                                            eventType = '시네마톡';
+                                        }
+                                        if (blockText.indexOf('굿즈') !== -1) {
+                                            hasEvent = true;
+                                            eventType = '굿즈';
+                                        }
+                                        if (blockText.indexOf('예매 준비중') !== -1 || blockText.indexOf('예매준비중') !== -1) {
+                                            isPreparing = true;
                                         }
 
-                                        // Detect time with event tag (e.g., "14:30" followed by "무대인사")
-                                        var timeMatch = line.match(/^(\d{1,2}:\d{2})/);
-                                        if (timeMatch && currentMovie) {
-                                            var timeStr = timeMatch[1];
-                                            // Check next few lines for event tags and status
-                                            var hasEvent = false;
-                                            var eventType = '';
-                                            var isPreparing = false;
-                                            for (var j = i; j < Math.min(i + 5, lines.length); j++) {
-                                                var checkLine = lines[j];
-                                                if (checkLine.indexOf('예매 준비중') !== -1 || checkLine.indexOf('예매준비중') !== -1) {
-                                                    isPreparing = true;
-                                                }
-                                                if (checkLine.indexOf('무대인사') !== -1) {
-                                                    hasEvent = true;
-                                                    eventType = '무대인사';
-                                                }
-                                                if (checkLine.indexOf('시네마톡') !== -1) {
-                                                    hasEvent = true;
-                                                    eventType = '시네마톡';
-                                                }
-                                                // GV 감지 비활성화 - CGV 페이지에서 오탐지가 너무 많음
-                                                // 실제 GV 이벤트는 대부분 "시네마톡"이나 "무대인사"로 표시됨
-                                                // if (checkLine.trim() === 'GV') { ... }
-                                                if (checkLine.indexOf('굿즈') !== -1) {
-                                                    hasEvent = true;
-                                                    eventType = '굿즈';
-                                                }
-                                                // Stop if we hit another time or movie
-                                                if (j > i && /^\d{1,2}:\d{2}/.test(lines[j])) break;
-                                            }
-                                            if (hasEvent) {
-                                                currentTimes.push({time: timeStr, eventType: eventType, preparing: isPreparing});
-                                            }
-                                        }
-                                    }
+                                        if (!hasEvent) continue;
 
-                                    // Don't forget last movie
-                                    if (currentMovie && currentTimes.length > 0) {
-                                        for (var t = 0; t < currentTimes.length; t++) {
-                                            results.push({movie: currentMovie, time: currentTimes[t].time, eventType: currentTimes[t].eventType, preparing: currentTimes[t].preparing || false});
+                                        // 영화 제목 찾기 - 상위 요소에서 검색
+                                        var movieName = '';
+                                        var parent = block.parentElement;
+                                        for (var p = 0; p < 10 && parent; p++) {
+                                            var parentText = parent.innerText || '';
+                                            var lines = parentText.split('\\n');
+                                            for (var l = 0; l < lines.length; l++) {
+                                                var line = lines[l].trim();
+                                                // 영화 제목 패턴: 한글로 시작, 2~30자, 시간/석/이벤트 아님
+                                                if (/^[가-힣]/.test(line) &&
+                                                    line.length >= 2 && line.length <= 30 &&
+                                                    !/^\d/.test(line) &&
+                                                    !/석$/.test(line) &&
+                                                    !/(무대인사|시네마톡|GV|굿즈|전체|오전|오후|심야)/.test(line) &&
+                                                    !/^(2D|3D|IMAX|Laser|\d+관)/.test(line)) {
+                                                    movieName = line;
+                                                    break;
+                                                }
+                                            }
+                                            if (movieName) break;
+                                            parent = parent.parentElement;
+                                        }
+
+                                        if (movieName && timeStr) {
+                                            // 중복 체크
+                                            var isDup = false;
+                                            for (var r = 0; r < results.length; r++) {
+                                                if (results[r].movie === movieName && results[r].time === timeStr) {
+                                                    isDup = true;
+                                                    break;
+                                                }
+                                            }
+                                            if (!isDup) {
+                                                results.push({
+                                                    movie: movieName,
+                                                    time: timeStr,
+                                                    eventType: eventType,
+                                                    preparing: isPreparing
+                                                });
+                                            }
                                         }
                                     }
 
