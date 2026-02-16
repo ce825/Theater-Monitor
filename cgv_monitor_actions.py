@@ -398,7 +398,50 @@ def check_stage_greetings():
                                 if not date_clicked:
                                     print(f"    날짜 스킵: {day} {date_num}")
                                     continue
-                                page.wait_for_timeout(1200)
+                                page.wait_for_timeout(1500)
+
+                                # 선택된 날짜 확인 - 클릭한 날짜가 실제로 선택되었는지 검증
+                                selected_date_info = page.evaluate("""() => {
+                                    // 선택된(활성화된) 날짜 요소 찾기
+                                    var selected = document.querySelector('[class*="active"], [class*="selected"], [class*="on"]');
+                                    if (selected) {
+                                        var text = selected.innerText || '';
+                                        var match = text.match(/(월|화|수|목|금|토|일)[\\n\\s]*(\\d{1,2})/);
+                                        if (match) {
+                                            return {day: match[1], date: match[2]};
+                                        }
+                                    }
+                                    return null;
+                                }""")
+
+                                # 클릭한 날짜와 선택된 날짜가 다르면 스킵
+                                if selected_date_info:
+                                    sel_day = selected_date_info.get('day', '')
+                                    sel_date = selected_date_info.get('date', '')
+                                    if sel_date != date_num:
+                                        print(f"    날짜 불일치 스킵: 클릭={day}{date_num}, 선택={sel_day}{sel_date}")
+                                        continue
+
+                                # 스케줄이 있는지 확인
+                                has_schedule = page.evaluate("""() => {
+                                    var bodyText = document.body.innerText || '';
+                                    // 스케줄이 없는 경우 메시지 확인
+                                    if (bodyText.indexOf('상영일정이 없습니다') !== -1 ||
+                                        bodyText.indexOf('상영정보가 없습니다') !== -1 ||
+                                        bodyText.indexOf('예매 가능한 상영시간이 없습니다') !== -1) {
+                                        return false;
+                                    }
+                                    // 시간 패턴이 있는지 확인 (HH:MM)
+                                    var timePattern = /\\d{1,2}:\\d{2}/;
+                                    var scheduleArea = document.body.innerText.substring(
+                                        document.body.innerText.indexOf('전체') || 0
+                                    );
+                                    return timePattern.test(scheduleArea);
+                                }""")
+
+                                if not has_schedule:
+                                    print(f"    스케줄 없음 스킵: {day} {date_num}")
+                                    continue
 
                                 # 페이지 스크롤하여 모든 영화 로드
                                 page.evaluate("""() => {
