@@ -9,6 +9,7 @@ import re
 import random
 import time
 import requests
+import holidays
 from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
@@ -27,48 +28,28 @@ TARGET_THEATERS = [
     ("서울", "여의도"),
 ]
 
-# 2026년 한국 공휴일 (월, 일) - 대체공휴일 포함
-KOREAN_HOLIDAYS_2026 = [
-    (1, 1),    # 신정
-    (1, 28),   # 설날 연휴
-    (1, 29),   # 설날
-    (1, 30),   # 설날 연휴
-    (3, 1),    # 삼일절
-    (3, 2),    # 삼일절 대체공휴일
-    (5, 5),    # 어린이날
-    (5, 24),   # 부처님오신날
-    (5, 25),   # 부처님오신날 대체공휴일
-    (6, 6),    # 현충일
-    (8, 15),   # 광복절
-    (8, 17),   # 광복절 대체공휴일
-    (9, 24),   # 추석 연휴
-    (9, 25),   # 추석
-    (9, 26),   # 추석 연휴
-    (10, 3),   # 개천절
-    (10, 5),   # 개천절 대체공휴일
-    (10, 9),   # 한글날
-    (12, 25),  # 크리스마스
-]
+# 한국 공휴일 (자동 계산 - 음력/대체공휴일 포함)
+KR_HOLIDAYS = holidays.KR()
 
 
-def is_holiday(month, day):
+def is_holiday(check_date):
     """해당 날짜가 공휴일인지 확인"""
-    return (month, day) in KOREAN_HOLIDAYS_2026
+    return check_date in KR_HOLIDAYS
 
 
 def get_holidays_in_range(start_date, days=30):
     """주어진 기간 내의 공휴일 날짜 목록 반환"""
-    holidays = []
+    holiday_list = []
     for i in range(days):
         check_date = start_date + timedelta(days=i)
-        if is_holiday(check_date.month, check_date.day):
+        if is_holiday(check_date):
             day_name = ["월", "화", "수", "목", "금", "토", "일"][check_date.weekday()]
-            holidays.append({
+            holiday_list.append({
                 "month": check_date.month,
                 "day": check_date.day,
                 "day_name": day_name
             })
-    return holidays
+    return holiday_list
 
 
 def load_saved_data():

@@ -17,7 +17,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 playwright playwright-stealth
+          pip install requests beautifulsoup4 playwright playwright-stealth holidays
           playwright install chromium
           playwright install-deps chromium
 
