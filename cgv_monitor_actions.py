@@ -27,6 +27,49 @@ TARGET_THEATERS = [
     ("서울", "여의도"),
 ]
 
+# 2026년 한국 공휴일 (월, 일) - 대체공휴일 포함
+KOREAN_HOLIDAYS_2026 = [
+    (1, 1),    # 신정
+    (1, 28),   # 설날 연휴
+    (1, 29),   # 설날
+    (1, 30),   # 설날 연휴
+    (3, 1),    # 삼일절
+    (3, 2),    # 삼일절 대체공휴일
+    (5, 5),    # 어린이날
+    (5, 24),   # 부처님오신날
+    (5, 25),   # 부처님오신날 대체공휴일
+    (6, 6),    # 현충일
+    (8, 15),   # 광복절
+    (8, 17),   # 광복절 대체공휴일
+    (9, 24),   # 추석 연휴
+    (9, 25),   # 추석
+    (9, 26),   # 추석 연휴
+    (10, 3),   # 개천절
+    (10, 5),   # 개천절 대체공휴일
+    (10, 9),   # 한글날
+    (12, 25),  # 크리스마스
+]
+
+
+def is_holiday(month, day):
+    """해당 날짜가 공휴일인지 확인"""
+    return (month, day) in KOREAN_HOLIDAYS_2026
+
+
+def get_holidays_in_range(start_date, days=30):
+    """주어진 기간 내의 공휴일 날짜 목록 반환"""
+    holidays = []
+    for i in range(days):
+        check_date = start_date + timedelta(days=i)
+        if is_holiday(check_date.month, check_date.day):
+            day_name = ["월", "화", "수", "목", "금", "토", "일"][check_date.weekday()]
+            holidays.append({
+                "month": check_date.month,
+                "day": check_date.day,
+                "day_name": day_name
+            })
+    return holidays
+
 
 def load_saved_data():
     if os.path.exists(DATA_FILE):
@@ -186,14 +229,18 @@ def check_stage_greetings():
                     page.wait_for_timeout(1500)
                     print(f"  극장 선택 완료")
 
-                    # 7. 모든 주말 날짜 확인 (화살표 클릭으로 날짜 범위 확장)
+                    # 7. 모든 주말 + 공휴일 날짜 확인 (화살표 클릭으로 날짜 범위 확장)
                     checked_dates = set()
                     max_arrow_clicks = 10
                     arrow_clicks = 0
 
+                    # 현재 월 기준 공휴일 목록 가져오기
+                    current_holidays = get_holidays_in_range(datetime.now(), days=60)
+                    holiday_dates = {(h["day_name"], h["day"]) for h in current_holidays}
+
                     while arrow_clicks <= max_arrow_clicks:
-                        # JavaScript로 캘린더에서 직접 주말 날짜 추출 (오탐지 방지)
-                        weekend_dates = page.evaluate("""() => {
+                        # JavaScript로 캘린더에서 모든 날짜 추출 (주말 + 공휴일 필터링용)
+                        all_dates = page.evaluate("""() => {
                             var results = [];
                             // 캘린더 영역 상단 350px 이내의 요소만 검색
                             var elements = document.querySelectorAll('li, button, div, span, a');
@@ -205,13 +252,22 @@ def check_stage_greetings():
                                 if (rect.height < 10 || rect.height > 80) continue;
 
                                 var text = (el.innerText || '').trim();
-                                var match = text.match(/^(토|일)\\n(\\d{1,2})$/);
+                                // 모든 요일 패턴 매칭 (월, 화, 수, 목, 금, 토, 일)
+                                var match = text.match(/^(월|화|수|목|금|토|일)\\n(\\d{1,2})$/);
                                 if (match) {
                                     results.push({day: match[1], date: match[2].replace(/^0/, '') || '0'});
                                 }
                             }
                             return results;
                         }""")
+
+                        # 주말 또는 공휴일만 필터링
+                        weekend_dates = []
+                        for d in all_dates:
+                            is_weekend = d['day'] in ['토', '일']
+                            is_holiday_date = (d['day'], int(d['date'])) in holiday_dates
+                            if is_weekend or is_holiday_date:
+                                weekend_dates.append(d)
 
                         # 중복 제거 및 정렬
                         seen = set()
@@ -224,7 +280,7 @@ def check_stage_greetings():
                         weekend_dates = sorted(unique_dates, key=lambda x: int(x['date']))
 
                         found_dates = [d['day'] + d['date'] for d in weekend_dates]
-                        print(f"  발견된 주말: {found_dates}")
+                        print(f"  발견된 주말/공휴일: {found_dates}")
 
                         # 새로운 주말 날짜가 없으면 종료
                         new_dates = [d for d in weekend_dates if f"{d['day']}_{d['date']}" not in checked_dates]
@@ -232,7 +288,7 @@ def check_stage_greetings():
                             if arrow_clicks == 0 and not weekend_dates:
                                 pass
                             else:
-                                print(f"  더 이상 새로운 주말 날짜 없음 → 다음 극장")
+                                print(f"  더 이상 새로운 주말/공휴일 날짜 없음 → 다음 극장")
                                 break
 
                         # 새로운 날짜만 확인
