@@ -491,13 +491,14 @@ def check_stage_greetings():
                                             var lines = parentText.split('\\n');
                                             for (var l = 0; l < lines.length; l++) {
                                                 var line = lines[l].trim();
-                                                // 영화 제목 패턴: 한글로 시작, 2~30자, 시간/석/이벤트 아님
+                                                // 영화 제목 패턴: 한글로 시작, 2~30자, 시간/석/이벤트/상태 아님
                                                 if (/^[가-힣]/.test(line) &&
                                                     line.length >= 2 && line.length <= 30 &&
                                                     !/^\d/.test(line) &&
                                                     !/석$/.test(line) &&
                                                     !/(무대인사|시네마톡|GV|굿즈|전체|오전|오후|심야)/.test(line) &&
-                                                    !/^(2D|3D|IMAX|Laser|\d+관)/.test(line)) {
+                                                    !/^(2D|3D|IMAX|Laser|\d+관)/.test(line) &&
+                                                    !/^(매진|마감|예매|잔여|좌석|상영중|상영예정|개봉|특별관|일반)$/.test(line)) {
                                                     movieName = line;
                                                     break;
                                                 }
