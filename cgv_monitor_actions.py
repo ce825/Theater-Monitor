@@ -227,29 +227,26 @@ def check_stage_greetings():
                     holiday_dates = {(h["day_name"], h["day"]) for h in current_holidays}
 
                     while arrow_clicks <= max_arrow_clicks:
-                        # JavaScript로 캘린더에서 모든 날짜 추출 (주말 + 공휴일 필터링용)
-                        all_dates = page.evaluate("""() => {
+                        # JavaScript로 캘린더 버튼에서 날짜 추출 (Swiper 기반 UI)
+                        all_dates = page.evaluate(r"""() => {
                             var results = [];
-                            // 캘린더 영역 상단 350px 이내의 요소만 검색
-                            var elements = document.querySelectorAll('li, button, div, span, a');
-                            for (var i = 0; i < elements.length; i++) {
-                                var el = elements[i];
-                                var rect = el.getBoundingClientRect();
-                                // 캘린더는 상단에 위치 (y: 50~350)
-                                if (rect.top < 50 || rect.top > 350) continue;
-                                if (rect.height < 10 || rect.height > 80) continue;
-
-                                var text = (el.innerText || '').trim();
-                                // 모든 요일 패턴 매칭 (월, 화, 수, 목, 금, 토, 일)
-                                var match = text.match(/^(월|화|수|목|금|토|일)\\n(\\d{1,2})$/);
-                                if (match) {
-                                    results.push({day: match[1], date: match[2].replace(/^0/, '') || '0'});
+                            var buttons = document.querySelectorAll('button[class*="dayScroll_scrollItem"]');
+                            for (var i = 0; i < buttons.length; i++) {
+                                var btn = buttons[i];
+                                var spans = btn.querySelectorAll('span');
+                                if (spans.length < 2) continue;
+                                var dayText = spans[0].innerText.trim();
+                                var dateText = spans[1].innerText.trim();
+                                // "오늘" 등 특수 텍스트는 스킵, 요일만 매칭
+                                if (/^(월|화|수|목|금|토|일)$/.test(dayText) && /^\d{1,2}$/.test(dateText)) {
+                                    var isDisabled = btn.disabled || btn.className.indexOf('Disabled') !== -1 || btn.className.indexOf('disabled') !== -1;
+                                    results.push({day: dayText, date: dateText.replace(/^0/, '') || '0', disabled: isDisabled});
                                 }
                             }
                             return results;
                         }""")
 
-                        # 주말 또는 공휴일만 필터링
+                        # 주말 또는 공휴일만 필터링 (비활성 날짜 정보 유지)
                         weekend_dates = []
                         for d in all_dates:
                             is_weekend = d['day'] in ['토', '일']
@@ -286,136 +283,55 @@ def check_stage_greetings():
                             date_key = f"{day}_{date_num}"
                             checked_dates.add(date_key)
 
-                            try:
-                                date_clicked = False
-                                date_padded = date_num.zfill(2)
-                                patterns = [
-                                    f"text=/{day}\\n{date_padded}$/",
-                                    f"text=/{day}\\n{date_num}$/",
-                                    f"text=/{day}.*{date_padded}/",
-                                    f"text=/{day}.*{date_num}/"
-                                ]
+                            # 비활성 날짜 스킵 (날짜 추출 시 이미 확인)
+                            if date_info.get("disabled"):
+                                print(f"    날짜 스킵(비활성): {day} {date_num}")
+                                continue
 
-                                # 먼저 JavaScript로 날짜 요소를 화면에 스크롤
-                                scroll_result = page.evaluate(
-                                    """(args) => {
+                            try:
+                                # button[class*="dayScroll_scrollItem"] 내 span으로 날짜 매칭 후 버튼 클릭
+                                click_result = page.evaluate(
+                                    r"""(args) => {
                                     var day = args.day;
                                     var dateNum = args.dateNum;
-                                    var datePadded = args.datePadded;
-                                    var items = document.querySelectorAll('li, button, div, span, a');
-                                    for (var i = 0; i < items.length; i++) {
-                                        var item = items[i];
-                                        var rect = item.getBoundingClientRect();
-                                        if (rect.top > 350 || rect.top < 0) continue;
-                                        var text = (item.innerText || '').trim();
-                                        if (text === day + '\\n' + datePadded ||
-                                            text === day + '\\n' + dateNum) {
-                                            item.scrollIntoView({behavior: 'instant', block: 'center', inline: 'center'});
-                                            return {found: true, text: text};
+                                    var buttons = document.querySelectorAll('button[class*="dayScroll_scrollItem"]');
+                                    for (var i = 0; i < buttons.length; i++) {
+                                        var btn = buttons[i];
+                                        var spans = btn.querySelectorAll('span');
+                                        if (spans.length < 2) continue;
+                                        var dayText = spans[0].innerText.trim();
+                                        var dateText = spans[1].innerText.trim().replace(/^0/, '');
+                                        if (dayText === day && dateText === dateNum) {
+                                            if (btn.disabled || btn.className.indexOf('Disabled') !== -1 || btn.className.indexOf('disabled') !== -1) {
+                                                return {clicked: false, disabled: true};
+                                            }
+                                            btn.scrollIntoView({behavior: 'instant', inline: 'center'});
+                                            btn.click();
+                                            return {clicked: true};
                                         }
                                     }
-                                    return {found: false};
-                                }""", {"day": day, "dateNum": date_num, "datePadded": date_padded})
+                                    return {clicked: false, notFound: true};
+                                }""", {"day": day, "dateNum": date_num})
 
-                                if scroll_result.get("found"):
-                                    page.wait_for_timeout(200)
-
-                                # 날짜 클릭 시도
-                                date_disabled = False
-                                for pattern in patterns:
-                                    if date_clicked:
-                                        break
-                                    try:
-                                        locator = page.locator(pattern).first
-                                        if locator.is_visible(timeout=1000):
-                                            # disabled 체크 (부모 요소까지 확인)
-                                            is_disabled = locator.evaluate("""el => {
-                                                if (el.disabled || el.className.includes('disabled')) return true;
-                                                var parent = el.parentElement;
-                                                for (var i = 0; i < 3 && parent; i++) {
-                                                    if (parent.disabled || parent.className.includes('disabled')) return true;
-                                                    var style = window.getComputedStyle(parent);
-                                                    if (style.opacity < 0.5 || style.pointerEvents === 'none') return true;
-                                                    parent = parent.parentElement;
-                                                }
-                                                var myStyle = window.getComputedStyle(el);
-                                                if (myStyle.opacity < 0.5 || myStyle.pointerEvents === 'none') return true;
-                                                return false;
-                                            }""")
-                                            if not is_disabled:
-                                                locator.click(timeout=3000)
-                                                date_clicked = True
-                                                print(f"    날짜 클릭: {day} {date_num}")
-                                            else:
-                                                date_disabled = True
-                                                print(f"    날짜 비활성: {day} {date_num}")
-                                    except:
-                                        pass
-
-                                # 비활성 날짜는 스킵 (JS 클릭 시도하지 않음)
-                                if date_disabled:
+                                if click_result.get("disabled"):
                                     print(f"    날짜 스킵(비활성): {day} {date_num}")
                                     continue
-
-                                # JavaScript로 직접 클릭 시도
-                                if not date_clicked:
-                                    js_click = page.evaluate(
-                                        """(args) => {
-                                        var day = args.day;
-                                        var dateNum = args.dateNum;
-                                        var datePadded = args.datePadded;
-                                        var items = document.querySelectorAll('li, button, div, span, a');
-                                        for (var i = 0; i < items.length; i++) {
-                                            var item = items[i];
-                                            var rect = item.getBoundingClientRect();
-                                            if (rect.top > 350 || rect.top < 0) continue;
-                                            var text = (item.innerText || '').trim();
-                                            if (text === day + '\\n' + datePadded ||
-                                                text === day + '\\n' + dateNum) {
-                                                // 비활성 상태 체크 (부모 포함)
-                                                var disabled = item.disabled || item.className.includes('disabled');
-                                                var parent = item.parentElement;
-                                                for (var j = 0; j < 3 && parent && !disabled; j++) {
-                                                    if (parent.disabled || parent.className.includes('disabled')) disabled = true;
-                                                    var style = window.getComputedStyle(parent);
-                                                    if (parseFloat(style.opacity) < 0.5 || style.pointerEvents === 'none') disabled = true;
-                                                    parent = parent.parentElement;
-                                                }
-                                                var myStyle = window.getComputedStyle(item);
-                                                if (parseFloat(myStyle.opacity) < 0.5 || myStyle.pointerEvents === 'none') disabled = true;
-
-                                                if (!disabled) {
-                                                    item.click();
-                                                    return {clicked: true, text: text, top: rect.top};
-                                                } else {
-                                                    return {clicked: false, disabled: true};
-                                                }
-                                            }
-                                        }
-                                        return {clicked: false, notFound: true};
-                                    }""", {"day": day, "dateNum": date_num, "datePadded": date_padded})
-
-                                    if js_click.get("clicked"):
-                                        date_clicked = True
-                                        print(f"    날짜 클릭(JS): {day} {date_num}")
-                                    elif js_click.get("disabled"):
-                                        print(f"    날짜 스킵(비활성): {day} {date_num}")
-                                        continue
-
-                                if not date_clicked:
-                                    print(f"    날짜 스킵: {day} {date_num}")
+                                if not click_result.get("clicked"):
+                                    print(f"    날짜 스킵(미발견): {day} {date_num}")
                                     continue
+
+                                print(f"    날짜 클릭: {day} {date_num}")
                                 page.wait_for_timeout(1500)
 
-                                # 선택된 날짜 확인 - 클릭한 날짜가 실제로 선택되었는지 검증
-                                selected_date_info = page.evaluate("""() => {
-                                    // 선택된(활성화된) 날짜 요소 찾기
-                                    var selected = document.querySelector('[class*="active"], [class*="selected"], [class*="on"]');
-                                    if (selected) {
-                                        var text = selected.innerText || '';
-                                        var match = text.match(/(월|화|수|목|금|토|일)[\\n\\s]*(\\d{1,2})/);
-                                        if (match) {
-                                            return {day: match[1], date: match[2]};
+                                # 선택된 날짜 확인 - itemActive 클래스로 검증
+                                selected_date_info = page.evaluate(r"""() => {
+                                    var buttons = document.querySelectorAll('button[class*="dayScroll_scrollItem"]');
+                                    for (var i = 0; i < buttons.length; i++) {
+                                        if (buttons[i].className.indexOf('Active') !== -1 || buttons[i].className.indexOf('active') !== -1) {
+                                            var spans = buttons[i].querySelectorAll('span');
+                                            if (spans.length >= 2) {
+                                                return {day: spans[0].innerText.trim(), date: spans[1].innerText.trim().replace(/^0/, '')};
+                                            }
                                         }
                                     }
                                     return null;
@@ -423,9 +339,9 @@ def check_stage_greetings():
 
                                 # 클릭한 날짜와 선택된 날짜가 다르면 스킵
                                 if selected_date_info:
-                                    sel_day = selected_date_info.get('day', '')
                                     sel_date = selected_date_info.get('date', '')
                                     if sel_date != date_num:
+                                        sel_day = selected_date_info.get('day', '')
                                         print(f"    날짜 불일치 스킵: 클릭={day}{date_num}, 선택={sel_day}{sel_date}")
                                         continue
 
@@ -607,17 +523,13 @@ def check_stage_greetings():
                             except Exception as e:
                                 print(f"  {day}요일 {date_num}일 오류: {e}")
 
-                        # 화살표 버튼 클릭하여 다음 날짜 범위로 이동
+                        # Swiper 다음 버튼으로 날짜 범위 이동
                         arrow_clicked = page.evaluate(
-                            """() => {
-                            const arrows = document.querySelectorAll('button, a, div, span');
-                            for (const el of arrows) {
-                                const text = (el.innerText || '').trim();
-                                const rect = el.getBoundingClientRect();
-                                if (rect.top < 300 && rect.top > 0 && (text === '>' || text === String.fromCharCode(8250))) {
-                                    el.click();
-                                    return true;
-                                }
+                            r"""() => {
+                            var nextBtn = document.querySelector('.swiper-button-next');
+                            if (nextBtn && !nextBtn.classList.contains('swiper-button-disabled')) {
+                                nextBtn.click();
+                                return true;
                             }
                             return false;
                         }""")
