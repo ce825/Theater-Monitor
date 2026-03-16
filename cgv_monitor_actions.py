@@ -414,6 +414,10 @@ def check_stage_greetings():
                                             hasEvent = true;
                                             eventType = '굿즈';
                                         }
+                                        if (blockText.indexOf('프리미어') !== -1) {
+                                            hasEvent = true;
+                                            eventType = '프리미어 상영';
+                                        }
                                         if (blockText.indexOf('예매 준비중') !== -1 || blockText.indexOf('예매준비중') !== -1) {
                                             isPreparing = true;
                                         }
@@ -439,7 +443,7 @@ def check_stage_greetings():
                                                     line.length >= 2 && line.length <= 30 &&
                                                     !/^\d/.test(line) &&
                                                     !/석$/.test(line) &&
-                                                    !/(무대인사|시네마톡|GV|굿즈|전체|오전|오후|심야)/.test(line) &&
+                                                    !/(무대인사|시네마톡|GV|굿즈|프리미어|전체|오전|오후|심야)/.test(line) &&
                                                     !/^(2D|3D|IMAX|Laser|\d+관)/.test(line) &&
                                                     !/^(매진|마감|예매|잔여|좌석|상영중|상영예정|개봉|특별관|일반)$/.test(line)) {
                                                     movieName = line;
