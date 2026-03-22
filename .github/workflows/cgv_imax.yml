@@ -1,0 +1,49 @@
+name: CGV IMAX Monitor - Project Hail Mary
+
+on:
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests playwright playwright-stealth
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: imax_showings.json
+          key: cgv-imax-${{ github.run_id }}
+          restore-keys: cgv-imax-
+
+      - name: Run monitor
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_IMAX }}
+        run: python cgv_imax_monitor.py
+
+      - name: Upload debug screenshot
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-screenshot-imax
+          path: debug_screenshot.png
+          if-no-files-found: ignore
+
+      - name: Save cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: imax_showings.json
+          key: cgv-imax-${{ github.run_id }}
