@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1485212944504721499/8h9YOMMJ9dsMgGKPzHfpdWjeoa0H0GCoA0XiLkr-ghlk6piRz-a3cdu8C0iC0FjU3u8Z")
 DATA_FILE = "imax_showings.json"
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
 
