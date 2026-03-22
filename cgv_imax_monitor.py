@@ -249,83 +249,87 @@ def check_imax_showings():
 
                             // 타겟 영화가 페이지에 없으면 빠르게 스킵
                             if (bodyText.indexOf(targetMovie) === -1) return results;
-
-                            // IMAX도 없으면 스킵
                             if (bodyText.indexOf('IMAX') === -1) return results;
 
-                            // 스케줄 영역의 모든 블록 탐색
-                            var blocks = document.querySelectorAll('[class*="time"], [class*="schedule"], [class*="showtime"], li, div');
-                            for (var i = 0; i < blocks.length; i++) {
-                                var block = blocks[i];
-                                var rect = block.getBoundingClientRect();
-                                if (rect.top < 400) continue;
+                            // 페이지 텍스트를 줄 단위로 파싱
+                            var lines = bodyText.split('\n');
+                            var currentMovie = '';
+                            var currentHall = '';
+                            var inTargetMovie = false;
+                            var inImaxSection = false;
 
-                                var blockText = block.innerText || '';
+                            for (var i = 0; i < lines.length; i++) {
+                                var line = lines[i].trim();
+                                if (!line) continue;
 
-                                // 시간 패턴 확인
-                                var timeMatch = blockText.match(/(\d{1,2}:\d{2})/);
-                                if (!timeMatch) continue;
-
-                                // IMAX 포함 확인
-                                if (blockText.indexOf('IMAX') === -1) continue;
-
-                                var timeStr = timeMatch[1];
-                                var isPreparing = blockText.indexOf('예매 준비중') !== -1 || blockText.indexOf('예매준비중') !== -1;
-                                var isSoldOut = blockText.indexOf('매진') !== -1 || blockText.indexOf('마감') !== -1;
-
-                                // 상영관 정보 추출
-                                var hallMatch = blockText.match(/(IMAX[^\n]*)/);
-                                var hall = hallMatch ? hallMatch[1].trim() : 'IMAX';
-
-                                // 영화 제목 확인 - 부모 요소에서 타겟 영화 포함 여부
-                                var found = false;
-                                var parent = block;
-                                for (var p = 0; p < 10 && parent; p++) {
-                                    var parentText = parent.innerText || '';
-                                    if (parentText.indexOf(targetMovie) !== -1) {
-                                        found = true;
-                                        break;
-                                    }
-                                    parent = parent.parentElement;
+                                // 영화 제목 감지 (타겟 영화인지 확인)
+                                if (line.indexOf(targetMovie) !== -1 && line.length <= 50) {
+                                    currentMovie = line;
+                                    inTargetMovie = true;
+                                    inImaxSection = false;
+                                    continue;
                                 }
 
-                                if (!found) continue;
+                                // 다른 영화로 넘어가면 리셋 (한글 2자 이상, 영화 제목 패턴)
+                                if (inTargetMovie && /^[가-힣]/.test(line) && line.length >= 2 && line.length <= 30 &&
+                                    line.indexOf(targetMovie) === -1 &&
+                                    !/^\d/.test(line) && !/석$/.test(line) &&
+                                    !/^(IMAX|4DX|ULTRA|Laser|2D|3D|일반|특별관|매진|마감|예매|잔여|좌석|자막|더빙|전체|오전|오후|심야|조조|심야)/.test(line) &&
+                                    !/(관$|석$)/.test(line) && !/\d+관/.test(line) &&
+                                    line.indexOf('시네마') === -1 && line.indexOf('CINE') === -1 &&
+                                    line.indexOf('[') === -1 && line.indexOf('(') === -1 &&
+                                    line.indexOf('리클라이너') === -1 && line.indexOf('골드클래스') === -1 &&
+                                    line.indexOf('스트레스리스') === -1 && line.indexOf('프리미엄') === -1 &&
+                                    line.indexOf('SCREENX') === -1 && line.indexOf('DOLBY') === -1 &&
+                                    line.indexOf('PRIVATE') === -1 && line.indexOf('PREMIUM') === -1) {
+                                    inTargetMovie = false;
+                                    inImaxSection = false;
+                                    continue;
+                                }
 
-                                // 영화 제목 추출
-                                var movieName = '';
-                                var searchParent = block;
-                                for (var p = 0; p < 10 && searchParent; p++) {
-                                    var pText = searchParent.innerText || '';
-                                    var lines = pText.split('\n');
-                                    for (var l = 0; l < lines.length; l++) {
-                                        var line = lines[l].trim();
-                                        if (line.indexOf(targetMovie) !== -1 && line.length >= 2 && line.length <= 50) {
-                                            movieName = line;
-                                            break;
+                                // IMAX 섹션 감지 (IMAX관, IMAX LASER 2D 등)
+                                if (inTargetMovie && line.indexOf('IMAX') !== -1) {
+                                    inImaxSection = true;
+                                    currentHall = line;
+                                    continue;
+                                }
+
+                                // 다른 상영관 섹션으로 넘어가면 IMAX 섹션 종료
+                                if (inImaxSection && /^(4DX|일반|특별관|ULTRA|SCREENX|DOLBY|리클라이너)/.test(line)) {
+                                    inImaxSection = false;
+                                    continue;
+                                }
+
+                                // IMAX 섹션 내에서 시간 패턴 추출
+                                if (inTargetMovie && inImaxSection) {
+                                    var timeMatch = line.match(/^(\d{1,2}:\d{2})/);
+                                    if (timeMatch) {
+                                        var timeStr = timeMatch[1];
+                                        var isPreparing = false;
+                                        var isSoldOut = false;
+
+                                        // 다음 몇 줄에서 상태 확인
+                                        for (var j = i; j < Math.min(i + 4, lines.length); j++) {
+                                            var checkLine = lines[j];
+                                            if (checkLine.indexOf('예매 준비중') !== -1 || checkLine.indexOf('예매준비중') !== -1) isPreparing = true;
+                                            if (checkLine.indexOf('매진') !== -1 || checkLine.indexOf('마감') !== -1) isSoldOut = true;
+                                        }
+
+                                        // 중복 체크
+                                        var isDup = false;
+                                        for (var r = 0; r < results.length; r++) {
+                                            if (results[r].time === timeStr) { isDup = true; break; }
+                                        }
+                                        if (!isDup) {
+                                            results.push({
+                                                movie: currentMovie || targetMovie,
+                                                time: timeStr,
+                                                hall: currentHall || 'IMAX',
+                                                preparing: isPreparing,
+                                                soldOut: isSoldOut
+                                            });
                                         }
                                     }
-                                    if (movieName) break;
-                                    searchParent = searchParent.parentElement;
-                                }
-
-                                if (!movieName) movieName = targetMovie;
-
-                                // 중복 체크
-                                var isDup = false;
-                                for (var r = 0; r < results.length; r++) {
-                                    if (results[r].time === timeStr && results[r].hall === hall) {
-                                        isDup = true;
-                                        break;
-                                    }
-                                }
-                                if (!isDup) {
-                                    results.push({
-                                        movie: movieName,
-                                        time: timeStr,
-                                        hall: hall,
-                                        preparing: isPreparing,
-                                        soldOut: isSoldOut
-                                    });
                                 }
                             }
                             return results;
