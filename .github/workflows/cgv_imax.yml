@@ -29,8 +29,6 @@ jobs:
           restore-keys: cgv-imax-
 
       - name: Run monitor
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_IMAX }}
         run: python cgv_imax_monitor.py
 
       - name: Upload debug screenshot
