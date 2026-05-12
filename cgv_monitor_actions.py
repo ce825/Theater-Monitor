@@ -395,6 +395,10 @@ def check_stage_greetings():
                                         var timeMatch = blockText.match(/(\d{1,2}:\d{2})/);
                                         if (!timeMatch) continue;
 
+                                        // 시간이 3개 이상이면 컨테이너 → 스킵 (개별 카드는 시작+종료 2개)
+                                        var allTimes = blockText.match(/\d{1,2}:\d{2}/g);
+                                        if (allTimes && allTimes.length > 2) continue;
+
                                         var timeStr = timeMatch[1];
 
                                         // 같은 블록 내에서 이벤트 태그 확인
