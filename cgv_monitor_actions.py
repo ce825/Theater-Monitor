@@ -321,7 +321,26 @@ def check_stage_greetings():
                                     continue
 
                                 print(f"    날짜 클릭: {day} {date_num}")
-                                page.wait_for_timeout(1500)
+
+                                # 스케줄 내용이 실제로 변경될 때까지 대기
+                                page.evaluate(r"""(dateNum) => {
+                                    return new Promise(function(resolve) {
+                                        var attempts = 0;
+                                        var check = function() {
+                                            attempts++;
+                                            // 로딩 오버레이가 있으면 대기
+                                            var loading = document.querySelector('[class*="loading"]');
+                                            if (loading && loading.offsetHeight > 0 && attempts < 20) {
+                                                setTimeout(check, 200);
+                                                return;
+                                            }
+                                            if (attempts >= 20) resolve();
+                                            else resolve();
+                                        };
+                                        setTimeout(check, 500);
+                                    });
+                                }""", date_num)
+                                page.wait_for_timeout(2000)
 
                                 # 선택된 날짜 확인 - itemActive 클래스로 검증
                                 selected_date_info = page.evaluate(r"""() => {
