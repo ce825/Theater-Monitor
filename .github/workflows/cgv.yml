@@ -41,6 +41,10 @@ jobs:
           path: debug_screenshot.png
           if-no-files-found: ignore
 
+      - name: Heartbeat ping
+        if: always()
+        run: curl -fsS --retry 3 https://hc-ping.com/02f9bb64-cced-4d90-bab8-13691070f33f
+
       - name: Save cache
         uses: actions/cache/save@v4
         if: always()
