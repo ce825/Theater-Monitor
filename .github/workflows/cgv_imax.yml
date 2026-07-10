@@ -1,4 +1,4 @@
-name: CGV IMAX Monitor - Project Hail Mary
+name: CGV IMAX/4DX Monitor
 
 on:
   workflow_dispatch:
