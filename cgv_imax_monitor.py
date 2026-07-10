@@ -280,7 +280,26 @@ def check_special_showings():
                                 var line = lines[i].trim();
                                 if (!line) continue;
 
-                                // 영화 제목 감지 (한글 시작, 2~50자, 상영관/태그 아님)
+                                // 1. IMAX/4DX 섹션 감지 (영화 제목 감지보다 먼저!)
+                                if (currentMovie && (line.indexOf('IMAX') !== -1 || line.indexOf('4DX') !== -1)) {
+                                    inSpecialHall = true;
+                                    currentHall = line;
+                                    continue;
+                                }
+
+                                // 2. 다른 상영관 섹션으로 넘어가면 종료
+                                if (inSpecialHall && (/^2D$/.test(line) || /^3D$/.test(line) ||
+                                    /^\d+관/.test(line) || line.indexOf('SCREENX') !== -1 ||
+                                    line.indexOf('DOLBY') !== -1 || line.indexOf('리클라이너') !== -1 ||
+                                    line.indexOf('스트레스리스') !== -1 || line.indexOf('템퍼') !== -1 ||
+                                    line.indexOf('골드클래스') !== -1 || line.indexOf('PREMIUM') !== -1 ||
+                                    line.indexOf('PRIVATE') !== -1)) {
+                                    inSpecialHall = false;
+                                    currentHall = '';
+                                    continue;
+                                }
+
+                                // 3. 영화 제목 감지 (한글/영문 시작, 2~50자, 상영관/태그 아님)
                                 if (/^[가-힣a-zA-Z]/.test(line) && line.length >= 2 && line.length <= 50 &&
                                     !/^\d/.test(line) && !/석$/.test(line) &&
                                     !/^(IMAX|4DX|ULTRA|Laser|2D|3D|일반|특별관|매진|마감|예매|예매 준비중|잔여|좌석|자막|더빙|전체|오전|오후|심야|조조|프리미어 상영|응원 상영회|응원상영)$/.test(line) &&
@@ -291,31 +310,15 @@ def check_special_showings():
                                     line.indexOf('스트레스리스') === -1 && line.indexOf('프리미엄') === -1 &&
                                     line.indexOf('SCREENX') === -1 && line.indexOf('DOLBY') === -1 &&
                                     line.indexOf('PRIVATE') === -1 && line.indexOf('PREMIUM') === -1 &&
+                                    line.indexOf('IMAX') === -1 && line.indexOf('4DX') === -1 &&
+                                    line.indexOf('ULTRA') === -1 && line.indexOf('ATMOS') === -1 &&
+                                    line.indexOf('Laser') === -1 &&
                                     line.indexOf('템퍼') === -1 &&
                                     line.indexOf('영등포') === -1 && line.indexOf('용산') === -1 &&
                                     line.indexOf('CGV') === -1 && line.indexOf('전체보기') === -1) {
 
                                     // 새 영화 시작 → 이전 섹션 리셋
                                     currentMovie = line;
-                                    inSpecialHall = false;
-                                    currentHall = '';
-                                    continue;
-                                }
-
-                                // IMAX 또는 4DX 섹션 감지
-                                if (currentMovie && (line.indexOf('IMAX') !== -1 || line.indexOf('4DX') !== -1)) {
-                                    inSpecialHall = true;
-                                    currentHall = line;
-                                    continue;
-                                }
-
-                                // 다른 상영관 섹션으로 넘어가면 종료
-                                if (inSpecialHall && (/^2D$/.test(line) || /^3D$/.test(line) ||
-                                    /^\d+관/.test(line) || line.indexOf('SCREENX') !== -1 ||
-                                    line.indexOf('DOLBY') !== -1 || line.indexOf('리클라이너') !== -1 ||
-                                    line.indexOf('스트레스리스') !== -1 || line.indexOf('템퍼') !== -1 ||
-                                    line.indexOf('골드클래스') !== -1 || line.indexOf('PREMIUM') !== -1 ||
-                                    line.indexOf('PRIVATE') !== -1)) {
                                     inSpecialHall = false;
                                     currentHall = '';
                                     continue;
