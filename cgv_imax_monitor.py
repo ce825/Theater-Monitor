@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-CGV IMAX 예매 오픈 모니터링 (GitHub Actions용)
-특정 영화의 IMAX 상영 스케줄이 새로 등록되면 Discord로 알림
+CGV IMAX/4DX 스케줄 모니터링 (GitHub Actions용)
+용산아이파크몰의 모든 영화 IMAX/4DX 상영이 새로 등록되면 Discord로 알림
 """
 
 import json
@@ -13,13 +13,13 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1485212944504721499/8h9YOMMJ9dsMgGKPzHfpdWjeoa0H0GCoA0XiLkr-ghlk6piRz-a3cdu8C0iC0FjU3u8Z")
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1464630439116410963/NWuBIWCBPmlajS4sXmZ9P-P53OKmQt48rFt8im6Yo3NDkc4-ohC0SY6ZPt5R8C3Owp3y")
 DATA_FILE = "imax_showings.json"
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
 
-# 모니터링 설정
 TARGET_THEATER = ("서울", "용산아이파크몰")
-TARGET_MOVIE = "헤일메리"  # 부분 매칭 (제목 변형 대응)
+# IMAX, 4DX 섹션 감지 키워드
+TARGET_HALLS = ["IMAX", "4DX"]
 
 
 def load_saved_data():
@@ -39,22 +39,26 @@ def send_discord_notification(showing, notification_type="new"):
         print("Discord webhook URL not set")
         return
 
+    hall_type = showing.get("hall", "")
+    is_imax = "IMAX" in hall_type
+    hall_label = "IMAX" if is_imax else "4DX"
+
     if notification_type == "preparing":
-        title = "⏳ IMAX 예매 준비중!"
+        title = f"⏳ {hall_label} 예매 준비중!"
         color = 0xFFA500
     elif notification_type == "sales_started":
-        title = "🎟️ IMAX 예매 오픈!"
+        title = f"🎟️ {hall_label} 예매 오픈!"
         color = 0x00FF00
     elif notification_type == "reopened":
-        title = "🔄 IMAX 취소표 발생!"
+        title = f"🔄 {hall_label} 취소표 발생!"
         color = 0x9932CC
     else:
-        title = "🆕 IMAX 상영 일정 등록!"
-        color = 0x0066FF
+        title = f"🆕 {hall_label} 상영 일정 등록!"
+        color = 0x0066FF if is_imax else 0xFF4500
 
     fields = [
         {"name": "🎬 영화", "value": showing.get("movie", "미정"), "inline": False},
-        {"name": "🎥 상영관", "value": showing.get("hall", "IMAX"), "inline": True},
+        {"name": "🎥 상영관", "value": hall_type, "inline": True},
         {"name": "📍 극장", "value": showing.get("theater", "미정"), "inline": True},
         {"name": "📅 날짜", "value": showing.get("date", "미정"), "inline": True},
         {"name": "⏰ 시간", "value": showing.get("time", "미정"), "inline": True},
@@ -66,7 +70,7 @@ def send_discord_notification(showing, notification_type="new"):
             "url": CGV_URL,
             "color": color,
             "fields": fields,
-            "footer": {"text": "CGV IMAX 예매 알림"},
+            "footer": {"text": f"CGV {hall_label} 예매 알림"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }]
     }
@@ -75,13 +79,14 @@ def send_discord_notification(showing, notification_type="new"):
         response = requests.post(DISCORD_WEBHOOK_URL, json=embed, timeout=10)
         if response.status_code == 204:
             status_msg = {"preparing": "예매준비중", "sales_started": "예매오픈", "reopened": "취소표", "new": "신규"}
-            print(f"  알림 전송 [{status_msg.get(notification_type, 'new')}]: {showing['movie']} {showing['date']} {showing['time']} {showing.get('hall', '')}")
+            print(f"  알림 전송 [{status_msg.get(notification_type, 'new')}]: {showing['movie']} {showing['date']} {showing['time']} {hall_type}")
+        time.sleep(0.5)
     except Exception as e:
         print(f"  Discord 오류: {e}")
 
 
-def check_imax_showings():
-    """용산아이파크몰의 프로젝트 헤일메리 IMAX 상영 확인"""
+def check_special_showings():
+    """용산아이파크몰의 모든 영화 IMAX/4DX 상영 확인"""
     all_showings = []
     region, theater = TARGET_THEATER
 
@@ -217,7 +222,23 @@ def check_imax_showings():
                         if not click_result.get("clicked"):
                             continue
 
-                        page.wait_for_timeout(1500)
+                        # 스케줄 로딩 대기
+                        page.evaluate(r"""() => {
+                            return new Promise(function(resolve) {
+                                var attempts = 0;
+                                var check = function() {
+                                    attempts++;
+                                    var loading = document.querySelector('[class*="loading"]');
+                                    if (loading && loading.offsetHeight > 0 && attempts < 20) {
+                                        setTimeout(check, 200);
+                                        return;
+                                    }
+                                    resolve();
+                                };
+                                setTimeout(check, 500);
+                            });
+                        }""")
+                        page.wait_for_timeout(2000)
 
                         # 선택 확인
                         selected = page.evaluate(r"""() => {
@@ -242,89 +263,90 @@ def check_imax_showings():
                         page.evaluate("() => { window.scrollTo(0, 0); }")
                         page.wait_for_timeout(400)
 
-                        # 헤일메리 IMAX 상영 추출
-                        imax_events = page.evaluate(r"""(targetMovie) => {
+                        # 모든 영화의 IMAX/4DX 상영 추출
+                        events = page.evaluate(r"""() => {
                             var results = [];
                             var bodyText = document.body.innerText || '';
 
-                            // 타겟 영화가 페이지에 없으면 빠르게 스킵
-                            if (bodyText.indexOf(targetMovie) === -1) return results;
-                            if (bodyText.indexOf('IMAX') === -1) return results;
+                            // IMAX 또는 4DX가 페이지에 없으면 스킵
+                            if (bodyText.indexOf('IMAX') === -1 && bodyText.indexOf('4DX') === -1) return results;
 
-                            // 페이지 텍스트를 줄 단위로 파싱
                             var lines = bodyText.split('\n');
                             var currentMovie = '';
                             var currentHall = '';
-                            var inTargetMovie = false;
-                            var inImaxSection = false;
+                            var inSpecialHall = false;
 
                             for (var i = 0; i < lines.length; i++) {
                                 var line = lines[i].trim();
                                 if (!line) continue;
 
-                                // 영화 제목 감지 (타겟 영화인지 확인)
-                                if (line.indexOf(targetMovie) !== -1 && line.length <= 50) {
-                                    currentMovie = line;
-                                    inTargetMovie = true;
-                                    inImaxSection = false;
-                                    continue;
-                                }
-
-                                // 다른 영화로 넘어가면 리셋 (한글 2자 이상, 영화 제목 패턴)
-                                if (inTargetMovie && /^[가-힣]/.test(line) && line.length >= 2 && line.length <= 30 &&
-                                    line.indexOf(targetMovie) === -1 &&
+                                // 영화 제목 감지 (한글 시작, 2~50자, 상영관/태그 아님)
+                                if (/^[가-힣a-zA-Z]/.test(line) && line.length >= 2 && line.length <= 50 &&
                                     !/^\d/.test(line) && !/석$/.test(line) &&
-                                    !/^(IMAX|4DX|ULTRA|Laser|2D|3D|일반|특별관|매진|마감|예매|잔여|좌석|자막|더빙|전체|오전|오후|심야|조조|심야)/.test(line) &&
-                                    !/(관$|석$)/.test(line) && !/\d+관/.test(line) &&
+                                    !/^(IMAX|4DX|ULTRA|Laser|2D|3D|일반|특별관|매진|마감|예매|예매 준비중|잔여|좌석|자막|더빙|전체|오전|오후|심야|조조|프리미어 상영|응원 상영회|응원상영)$/.test(line) &&
+                                    !/(관$|석$)/.test(line) && !/^\d+관/.test(line) &&
                                     line.indexOf('시네마') === -1 && line.indexOf('CINE') === -1 &&
                                     line.indexOf('[') === -1 && line.indexOf('(') === -1 &&
                                     line.indexOf('리클라이너') === -1 && line.indexOf('골드클래스') === -1 &&
                                     line.indexOf('스트레스리스') === -1 && line.indexOf('프리미엄') === -1 &&
                                     line.indexOf('SCREENX') === -1 && line.indexOf('DOLBY') === -1 &&
-                                    line.indexOf('PRIVATE') === -1 && line.indexOf('PREMIUM') === -1) {
-                                    inTargetMovie = false;
-                                    inImaxSection = false;
+                                    line.indexOf('PRIVATE') === -1 && line.indexOf('PREMIUM') === -1 &&
+                                    line.indexOf('템퍼') === -1 &&
+                                    line.indexOf('영등포') === -1 && line.indexOf('용산') === -1 &&
+                                    line.indexOf('CGV') === -1 && line.indexOf('전체보기') === -1) {
+
+                                    // 새 영화 시작 → 이전 섹션 리셋
+                                    currentMovie = line;
+                                    inSpecialHall = false;
+                                    currentHall = '';
                                     continue;
                                 }
 
-                                // IMAX 섹션 감지 (IMAX관, IMAX LASER 2D 등)
-                                if (inTargetMovie && line.indexOf('IMAX') !== -1) {
-                                    inImaxSection = true;
+                                // IMAX 또는 4DX 섹션 감지
+                                if (currentMovie && (line.indexOf('IMAX') !== -1 || line.indexOf('4DX') !== -1)) {
+                                    inSpecialHall = true;
                                     currentHall = line;
                                     continue;
                                 }
 
-                                // 다른 상영관 섹션으로 넘어가면 IMAX 섹션 종료
-                                if (inImaxSection && /^(4DX|일반|특별관|ULTRA|SCREENX|DOLBY|리클라이너)/.test(line)) {
-                                    inImaxSection = false;
+                                // 다른 상영관 섹션으로 넘어가면 종료
+                                if (inSpecialHall && (/^2D$/.test(line) || /^3D$/.test(line) ||
+                                    /^\d+관/.test(line) || line.indexOf('SCREENX') !== -1 ||
+                                    line.indexOf('DOLBY') !== -1 || line.indexOf('리클라이너') !== -1 ||
+                                    line.indexOf('스트레스리스') !== -1 || line.indexOf('템퍼') !== -1 ||
+                                    line.indexOf('골드클래스') !== -1 || line.indexOf('PREMIUM') !== -1 ||
+                                    line.indexOf('PRIVATE') !== -1)) {
+                                    inSpecialHall = false;
+                                    currentHall = '';
                                     continue;
                                 }
 
-                                // IMAX 섹션 내에서 시간 패턴 추출
-                                if (inTargetMovie && inImaxSection) {
+                                // IMAX/4DX 섹션 내에서 시간 추출
+                                if (currentMovie && inSpecialHall) {
                                     var timeMatch = line.match(/^(\d{1,2}:\d{2})/);
                                     if (timeMatch) {
                                         var timeStr = timeMatch[1];
                                         var isPreparing = false;
                                         var isSoldOut = false;
 
-                                        // 다음 몇 줄에서 상태 확인
                                         for (var j = i; j < Math.min(i + 4, lines.length); j++) {
                                             var checkLine = lines[j];
                                             if (checkLine.indexOf('예매 준비중') !== -1 || checkLine.indexOf('예매준비중') !== -1) isPreparing = true;
                                             if (checkLine.indexOf('매진') !== -1 || checkLine.indexOf('마감') !== -1) isSoldOut = true;
                                         }
 
-                                        // 중복 체크
+                                        // 중복 체크 (같은 영화+시간+상영관)
                                         var isDup = false;
                                         for (var r = 0; r < results.length; r++) {
-                                            if (results[r].time === timeStr) { isDup = true; break; }
+                                            if (results[r].movie === currentMovie && results[r].time === timeStr && results[r].hall === currentHall) {
+                                                isDup = true; break;
+                                            }
                                         }
                                         if (!isDup) {
                                             results.push({
-                                                movie: currentMovie || targetMovie,
+                                                movie: currentMovie,
                                                 time: timeStr,
-                                                hall: currentHall || 'IMAX',
+                                                hall: currentHall,
                                                 preparing: isPreparing,
                                                 soldOut: isSoldOut
                                             });
@@ -333,10 +355,10 @@ def check_imax_showings():
                                 }
                             }
                             return results;
-                        }""", TARGET_MOVIE)
+                        }""")
 
-                        if imax_events:
-                            print(f"  ★ {day} {date_num}일 IMAX 발견: {len(imax_events)}건")
+                        if events:
+                            print(f"  ★ {day} {date_num}일 IMAX/4DX 발견: {len(events)}건")
 
                             today = datetime.now()
                             target_day = int(date_num)
@@ -353,16 +375,17 @@ def check_imax_showings():
 
                             date_str = f"{current_month}월 {date_num}일 ({day})"
 
-                            for event in imax_events:
+                            for event in events:
+                                movie = event.get("movie", "미정")
                                 time_str = event.get("time", "")
-                                hall = event.get("hall", "IMAX")
-                                showing_id = f"용산_{current_year}_{current_month}_{date_num}_{time_str}_{hall}"
+                                hall = event.get("hall", "")
+                                showing_id = f"용산_{current_year}_{current_month}_{date_num}_{time_str}_{movie[:10]}_{hall}"
 
                                 if showing_id not in [x["id"] for x in all_showings]:
                                     status_str = " [예매준비중]" if event.get("preparing") else (" [매진]" if event.get("soldOut") else "")
-                                    print(f"    - {event['movie']} {time_str} {hall}{status_str}")
+                                    print(f"    - {movie} {time_str} {hall}{status_str}")
                                     all_showings.append({
-                                        "movie": event["movie"],
+                                        "movie": movie,
                                         "theater": f"CGV {theater}",
                                         "date": date_str,
                                         "time": time_str,
@@ -407,18 +430,18 @@ def main():
     print(f"[{datetime.now()}] 랜덤 딜레이: {delay}초")
     time.sleep(delay)
 
-    print(f"[{datetime.now()}] CGV IMAX 모니터링 시작 - {TARGET_MOVIE}...")
+    print(f"[{datetime.now()}] CGV IMAX/4DX 모니터링 시작 - 용산아이파크몰...")
 
     saved_data = load_saved_data()
     saved_ids = set(s.get("id", "") for s in saved_data.get("showings", []))
 
-    showings = check_imax_showings()
+    showings = check_special_showings()
 
     if showings is None:
         print("조회 실패")
         return
 
-    print(f"\n총 {len(showings)}개 IMAX 상영 발견")
+    print(f"\n총 {len(showings)}개 IMAX/4DX 상영 발견")
 
     # 첫 실행
     if not saved_data.get("showings"):
@@ -427,7 +450,7 @@ def main():
         save_data(saved_data)
         if showings and DISCORD_WEBHOOK_URL:
             requests.post(DISCORD_WEBHOOK_URL, json={
-                "content": f"✅ CGV IMAX 모니터링 시작!\n{TARGET_MOVIE} IMAX 상영 {len(showings)}개 추적 중"
+                "content": f"✅ CGV IMAX/4DX 모니터링 시작!\n용산아이파크몰 IMAX/4DX 상영 {len(showings)}개 추적 중"
             }, timeout=10)
         return
 
@@ -459,7 +482,7 @@ def main():
 
     # 알림 전송
     if new_showings:
-        print(f"새 IMAX 상영 {len(new_showings)}개!")
+        print(f"새 IMAX/4DX 상영 {len(new_showings)}개!")
         for s in new_showings:
             if s.get("preparing"):
                 send_discord_notification(s, "preparing")
@@ -480,7 +503,7 @@ def main():
     if new_showings or sales_started or reopened:
         save_data(saved_data)
     else:
-        print("새 IMAX 상영 없음")
+        print("새 IMAX/4DX 상영 없음")
 
 
 if __name__ == "__main__":
