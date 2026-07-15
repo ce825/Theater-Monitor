@@ -470,7 +470,7 @@ def check_stage_greetings():
                                                     !/^(2D|3D|IMAX|Laser|\d+관)/.test(line) &&
                                                     !/^(매진|마감|예매|예매 준비중|잔여|좌석|상영중|상영예정|개봉|특별관|일반|자막|더빙|프리미어 상영|조조|심야|응원 상영회|응원상영)$/.test(line) &&
                                                     line.indexOf('시네마') === -1 && line.indexOf('CINE') === -1 &&
-                                                    line.indexOf('[') === -1 && line.indexOf('템퍼') === -1 && line.indexOf('씨네앤') === -1 && line.indexOf('리빙룸') === -1 &&
+                                                    line.indexOf('[') === -1 && line.indexOf('템퍼') === -1 && line.indexOf('씨네앤') === -1 && line.indexOf('리빙룸') === -1 && line.indexOf('영어 자막') === -1 && line.indexOf('영어자막') === -1 &&
                                                     line.indexOf('스트레스리스') === -1 && line.indexOf('프리미엄') === -1 &&
                                                     line.indexOf('골드클래스') === -1 && line.indexOf('SCREENX') === -1 &&
                                                     line.indexOf('DOLBY') === -1 && line.indexOf('PRIVATE') === -1 &&
