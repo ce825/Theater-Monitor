@@ -1,5 +1,9 @@
-name: CGV IMAX/4DX Monitor
+name: CGV IMAX/4DX Monitor (구버전 · 폴백)
 
+# IMAX/4DX 감시는 cgv.yml(API 방식)로 통합되었다.
+# 이 워크플로는 API가 막혔을 때 수동으로 돌리는 Playwright 폴백으로만 남겨둔다.
+# cron-job.org에서 이 워크플로를 트리거하고 있다면 반드시 해제할 것 —
+# 그대로 두면 cgv.yml과 중복 알림이 발생한다.
 on:
   workflow_dispatch:
 

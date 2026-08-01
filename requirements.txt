@@ -1,0 +1,9 @@
+# API 방식 모니터 (cgv_monitor_api.py) — Actions/로컬 공통
+curl_cffi>=0.7      # Cloudflare TLS 지문 우회에 필요 (requests로는 403)
+requests
+holidays
+
+# 아래는 Playwright 폴백 스크립트용 (cgv_monitor.py, cgv_monitor_actions.py, cgv_imax_monitor.py)
+# playwright
+# playwright-stealth
+# beautifulsoup4

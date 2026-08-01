@@ -1,11 +1,17 @@
-name: CGV Stage Greeting Monitor
+name: CGV Monitor (무대인사 + IMAX/4DX)
 
 on:
   workflow_dispatch:  # cron-job.org에서 트리거
 
+# 루프 방식이라 실행이 겹치면 안 된다. 앞 실행이 끝날 때까지 대기시킨다.
+concurrency:
+  group: cgv-monitor
+  cancel-in-progress: false
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -16,19 +22,37 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 playwright playwright-stealth holidays
-          playwright install chromium
-          playwright install-deps chromium
+        run: pip install curl_cffi requests holidays
 
       - name: Restore cache
         uses: actions/cache@v4
         with:
-          path: stage_greetings.json
-          key: cgv-greetings-${{ github.run_id }}
-          restore-keys: cgv-greetings-
+          path: |
+            stage_greetings.json
+            imax_showings.json
+          key: cgv-state-${{ github.run_id }}
+          restore-keys: cgv-state-
 
-      - name: Run monitor
+      # 약 50분간 60초 간격으로 감시한다.
+      # 1사이클 = 극장×날짜 58슬롯, 요청 약 60회, 약 45초.
+      - name: Run monitor (API)
+        id: api
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          IMAX_DISCORD_WEBHOOK_URL: ${{ secrets.IMAX_DISCORD_WEBHOOK_URL }}
+          HEALTHCHECK_URL: https://hc-ping.com/02f9bb64-cced-4d90-bab8-13691070f33f
+        run: python cgv_monitor_api.py --loop 3000 --interval 60
+
+      # API가 막히거나 스펙이 바뀌면 기존 Playwright 스크래퍼로 1회 확인한다.
+      - name: Install Playwright (fallback only)
+        if: failure() && steps.api.outcome == 'failure'
+        run: |
+          pip install beautifulsoup4 playwright playwright-stealth
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run monitor (Playwright fallback)
+        if: failure() && steps.api.outcome == 'failure'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python cgv_monitor_actions.py
@@ -49,5 +73,7 @@ jobs:
         uses: actions/cache/save@v4
         if: always()
         with:
-          path: stage_greetings.json
-          key: cgv-greetings-${{ github.run_id }}
+          path: |
+            stage_greetings.json
+            imax_showings.json
+          key: cgv-state-${{ github.run_id }}
