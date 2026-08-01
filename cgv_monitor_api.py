@@ -71,6 +71,11 @@ IMAX_WEBHOOK_DEFAULT = ("https://discord.com/api/webhooks/1464630439116410963/"
 STATUS_LABEL = {"preparing": "예매준비중", "sales_started": "예매오픈",
                 "reopened": "취소표", "new": "신규"}
 
+# 인기 회차는 잔여석이 0과 1 사이를 계속 오간다(취소 → 즉시 예매 → 또 취소).
+# 1분 간격으로 보면 같은 회차의 취소표 알림이 몇 분 간격으로 반복되므로,
+# 같은 회차·같은 종류의 알림은 이 시간 안에 한 번만 보낸다.
+NOTIFY_COOLDOWN = {"reopened": 1800, "sales_started": 600, "preparing": 1800}
+
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -184,6 +189,11 @@ class Track:
 
     def save(self):
         self.data["parser"] = PARSER_VERSION
+        # 쿨다운 기록이 무한정 쌓이지 않도록 가장 긴 쿨다운의 2배가 지난 항목은 버린다
+        sent = self.data.get("notified_at")
+        if sent:
+            cutoff = time.time() - max(NOTIFY_COOLDOWN.values()) * 2
+            self.data["notified_at"] = {k: v for k, v in sent.items() if v > cutoff}
         if self.dry_run:  # 검증 실행이 상태 파일을 덮어쓰지 않도록
             log(f"  ({self.name} 저장 생략) {len(self.items)}건")
             return
@@ -196,6 +206,20 @@ class Track:
         return self.data[self.state_key]
 
     # 알림 ---------------------------------------------------------------
+
+    def _cooldown_active(self, item, kind):
+        """같은 회차·같은 종류의 알림을 쿨다운 안에서 반복하지 않도록 막는다."""
+        window = NOTIFY_COOLDOWN.get(kind)
+        if not window:
+            return False
+        sent_at = self.data.setdefault("notified_at", {}).get(f"{item['id']}|{kind}")
+        if sent_at and time.time() - sent_at < window:
+            return True
+        return False
+
+    def _mark_notified(self, item, kind):
+        if kind in NOTIFY_COOLDOWN:
+            self.data.setdefault("notified_at", {})[f"{item['id']}|{kind}"] = time.time()
 
     def notify(self, item, kind):
         desc = (f"[{STATUS_LABEL.get(kind, kind)}] {item['movie']} - "
@@ -243,16 +267,29 @@ class Track:
                 self.items.append(item)
                 by_id[item["id"]] = item
                 changed = True
-                self.notify(item, "preparing" if item["preparing"] else "new")
+                kind = "preparing" if item["preparing"] else "new"
+                self.notify(item, kind)
+                self._mark_notified(item, kind)
                 notified += 1
                 continue
 
             if old.get("preparing") and not item["preparing"] and not item["sold_out"]:
-                self.notify(item, "sales_started")
-                notified += 1
+                kind = "sales_started"
             elif old.get("sold_out") and not item["sold_out"]:
-                self.notify(item, "reopened")
-                notified += 1
+                kind = "reopened"
+            else:
+                kind = None
+
+            if kind:
+                # 잔여석이 0↔1을 오가며 같은 알림이 반복되는 것을 막는다
+                if self._cooldown_active(item, kind):
+                    log(f"  [{self.name}] 쿨다운으로 생략 [{STATUS_LABEL[kind]}] "
+                        f"{item['movie']} {item['date']} {item['time']}")
+                else:
+                    self.notify(item, kind)
+                    self._mark_notified(item, kind)
+                    notified += 1
+                changed = True
 
             # 좌석/상태는 알림 여부와 무관하게 최신값을 유지한다
             if (old.get("preparing") != item["preparing"]
