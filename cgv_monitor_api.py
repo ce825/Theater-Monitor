@@ -19,7 +19,7 @@ CGV 내부 JSON API로 대체한 버전. 1회 스캔이 약 40초로 줄어들�
 
 환경변수:
     DISCORD_WEBHOOK_URL       무대인사 알림 웹훅
-    IMAX_DISCORD_WEBHOOK_URL  IMAX/4DX 알림 웹훅 (미설정 시 기존 하드코딩 값)
+    IMAX_DISCORD_WEBHOOK_URL  IMAX/4DX 알림 웹훅
     IMAX_OPEN_WEBHOOK_URL     IMAX 신규 회차 등록 알림만 추가로 보낼 웹훅 (선택).
                               4DX와 취소표 알림은 보내지 않는다
     HEALTHCHECK_URL           매 사이클 핑을 보낼 healthchecks.io URL (선택)
@@ -66,9 +66,6 @@ STAGE_THEATERS = [
 ]
 
 IMAX_THEATERS = [("서울", "용산아이파크몰")]
-
-IMAX_WEBHOOK_DEFAULT = ("https://discord.com/api/webhooks/1464630439116410963/"
-                        "NWuBIWCBPmlajS4sXmZ9P-P53OKmQt48rFt8im6Yo3NDkc4-ohC0SY6ZPt5R8C3Owp3y")
 
 STATUS_LABEL = {"preparing": "예매준비중", "sales_started": "예매오픈",
                 "reopened": "취소표", "new": "신규"}
@@ -350,9 +347,7 @@ def build_tracks(dry_run=False, selected=("stage", "imax")):
                 records, theater, wanted=("IMAX", "4DX")),
             data_file="imax_showings.json",
             state_key="showings",
-            # GitHub Actions는 미설정 시크릿을 빈 문자열로 넘긴다. `or`로 받아야
-            # 하드코딩 기본값이 살아난다 (커밋 612e602에서 같은 문제를 겪었음).
-            webhook=os.environ.get("IMAX_DISCORD_WEBHOOK_URL") or IMAX_WEBHOOK_DEFAULT,
+            webhook=os.environ.get("IMAX_DISCORD_WEBHOOK_URL", ""),
             # IMAX 신규 회차 등록(= 예매 오픈)만 두 번째 채널로도 보낸다.
             # 4DX와 취소표/좌석 변동 알림은 기존 채널에만 간다.
             extra_webhook=os.environ.get("IMAX_OPEN_WEBHOOK_URL", ""),
@@ -436,6 +431,15 @@ def main():
 
     selected = ("stage", "imax") if args.track == "all" else (args.track,)
     tracks = build_tracks(dry_run=args.dry_run, selected=selected)
+
+    # 웹훅이 비어 있으면 감시는 돌지만 알림이 조용히 사라진다.
+    # GitHub Actions는 미등록 시크릿을 빈 문자열로 넘기므로 시작 시점에 크게 알린다.
+    if not args.dry_run:
+        for track in tracks.values():
+            if not track.webhook:
+                log(f"⚠️  [{track.name}] 웹훅이 비어 있습니다 - 알림이 발송되지 않습니다. "
+                    f"GitHub 시크릿 등록을 확인하세요")
+
     monitor = Monitor(tracks, interval=args.interval)
 
     if args.once:

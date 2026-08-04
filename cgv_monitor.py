@@ -16,7 +16,9 @@ from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
 # 설정
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1464630439116410963/NWuBIWCBPmlajS4sXmZ9P-P53OKmQt48rFt8im6Yo3NDkc4-ohC0SY6ZPt5R8C3Owp3y"
+# 웹훅은 환경변수로만 받는다. 로컬 실행 시:
+#   DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...' python cgv_monitor.py
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stage_greetings.json")
 CGV_URL = "https://cgv.co.kr/cnm/movieBook"
 

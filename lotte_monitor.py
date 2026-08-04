@@ -13,10 +13,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 설정
-DISCORD_WEBHOOK_URL = os.environ.get(
-    "DISCORD_WEBHOOK_URL",
-    "https://discord.com/api/webhooks/1465410522424934451/VsOivK4NUqeDW4TzNBogspvPPZXC-B6MbA_3V-objWYt0kymcez8kYyvkivtOaMqBBdi"
-)
+# 웹훅은 시크릿/환경변수로만 받는다 (LOTTE_DISCORD_WEBHOOK_URL -> DISCORD_WEBHOOK_URL)
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lotte_events.json")
 
 # 롯데시네마 API URLs
@@ -230,6 +228,9 @@ def main():
     time.sleep(delay)
 
     print(f"[{datetime.now()}] 롯데시네마 이벤트 모니터링 시작...")
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️  DISCORD_WEBHOOK_URL이 비어 있습니다 - 알림이 발송되지 않습니다. "
+              "LOTTE_DISCORD_WEBHOOK_URL 시크릿을 확인하세요")
     start_time = time.time()
 
     # 저장된 이벤트 불러오기

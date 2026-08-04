@@ -14,10 +14,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 설정
 # Discord Webhook URL (환경변수 또는 기본값)
-DISCORD_WEBHOOK_URL = os.environ.get(
-    "DISCORD_WEBHOOK_URL",
-    "https://discord.com/api/webhooks/1465405351108153425/vWY6nTRfFs3fKJyx3EM2SrwmKjnWQaySkHcCvDi2vxrwSEDFhf5t34I37qUX4Bz31c3E"
-)
+# 웹훅은 시크릿/환경변수로만 받는다 (MEGABOX_DISCORD_WEBHOOK_URL -> DISCORD_WEBHOOK_URL)
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "megabox_events.json")
 
 # 알림 대상 지역 (서울/경기만)
@@ -252,6 +250,9 @@ def main():
     time.sleep(delay)
 
     print(f"[{datetime.now()}] 메가박스 이벤트 모니터링 시작...")
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️  DISCORD_WEBHOOK_URL이 비어 있습니다 - 알림이 발송되지 않습니다. "
+              "MEGABOX_DISCORD_WEBHOOK_URL 시크릿을 확인하세요")
     start_time = time.time()
 
     # 저장된 이벤트 불러오기
