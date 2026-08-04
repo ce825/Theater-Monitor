@@ -20,6 +20,8 @@ CGV 내부 JSON API로 대체한 버전. 1회 스캔이 약 40초로 줄어들�
 환경변수:
     DISCORD_WEBHOOK_URL       무대인사 알림 웹훅
     IMAX_DISCORD_WEBHOOK_URL  IMAX/4DX 알림 웹훅 (미설정 시 기존 하드코딩 값)
+    IMAX_OPEN_WEBHOOK_URL     IMAX 신규 회차 등록 알림만 추가로 보낼 웹훅 (선택).
+                              4DX와 취소표 알림은 보내지 않는다
     HEALTHCHECK_URL           매 사이클 핑을 보낼 healthchecks.io URL (선택)
     LOOP_SECONDS / LOOP_INTERVAL   --loop / --interval 기본값
 """
@@ -161,7 +163,8 @@ class Track:
     """하나의 감시 대상(무대인사 / IMAX·4DX)에 대한 상태 + 알림 처리."""
 
     def __init__(self, name, theaters, weekends_only, extractor, data_file,
-                 state_key, webhook, embed_builder, start_message, dry_run=False):
+                 state_key, webhook, embed_builder, start_message, dry_run=False,
+                 extra_webhook="", extra_match=None):
         self.name = name
         self.theaters = theaters
         self.weekends_only = weekends_only
@@ -172,6 +175,10 @@ class Track:
         self.embed_builder = embed_builder
         self.start_message = start_message
         self.dry_run = dry_run
+        # 일부 알림만 골라 두 번째 채널로도 보낼 때 사용한다.
+        # extra_match(item, kind) -> bool 이면 그 알림을 extra_webhook으로도 발송.
+        self.extra_webhook = extra_webhook
+        self.extra_match = extra_match
         self.data = self._load()
 
     # 상태 저장 -----------------------------------------------------------
@@ -224,18 +231,29 @@ class Track:
     def notify(self, item, kind):
         desc = (f"[{STATUS_LABEL.get(kind, kind)}] {item['movie']} - "
                 f"{item['theater']} {item['date']} {item['time']}")
+        to_extra = bool(self.extra_webhook and self.extra_match
+                        and self.extra_match(item, kind))
+
         if self.dry_run or not self.webhook:
-            log(f"  ({self.name} 알림 생략) {desc}")
+            log(f"  ({self.name} 알림 생략) {desc}" + (" [+추가채널]" if to_extra else ""))
             return
+
         title, color, footer, fields = self.embed_builder(item, kind)
-        ok = post_discord(self.webhook, {"embeds": [{
+        payload = {"embeds": [{
             "title": title, "url": CGV_URL, "color": color, "fields": fields,
             "footer": {"text": footer},
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        }]})
+        }]}
+        ok = post_discord(self.webhook, payload)
         if ok:
             log(f"  [{self.name}] 알림 전송 {desc}")
         time.sleep(0.5)  # Discord 레이트리밋 여유
+
+        if to_extra:
+            # 추가 채널 발송이 실패해도 기본 알림은 이미 나갔으므로 로그만 남긴다
+            if post_discord(self.extra_webhook, payload):
+                log(f"  [{self.name}] 추가 채널 전송 {desc}")
+            time.sleep(0.5)
 
     def notify_plain(self, content):
         if self.dry_run or not self.webhook:
@@ -335,6 +353,11 @@ def build_tracks(dry_run=False, selected=("stage", "imax")):
             # GitHub Actions는 미설정 시크릿을 빈 문자열로 넘긴다. `or`로 받아야
             # 하드코딩 기본값이 살아난다 (커밋 612e602에서 같은 문제를 겪었음).
             webhook=os.environ.get("IMAX_DISCORD_WEBHOOK_URL") or IMAX_WEBHOOK_DEFAULT,
+            # IMAX 신규 회차 등록(= 예매 오픈)만 두 번째 채널로도 보낸다.
+            # 4DX와 취소표/좌석 변동 알림은 기존 채널에만 간다.
+            extra_webhook=os.environ.get("IMAX_OPEN_WEBHOOK_URL", ""),
+            extra_match=lambda item, kind: (
+                kind == "new" and item.get("hall_label") == "IMAX"),
             embed_builder=imax_embed,
             start_message="✅ CGV IMAX/4DX 모니터링 시작! (용산아이파크몰)",
             dry_run=dry_run,
