@@ -1,0 +1,25 @@
+name: Webhook Health Check (임시 진단)
+
+# DISCORD_WEBHOOK_URL 시크릿이 가리키는 웹훅이 아직 살아 있는지만 확인한다.
+# 시크릿 값은 출력하지 않고 HTTP 상태 코드만 찍는다.
+#   204/200 -> 살아 있음
+#   404     -> 삭제된 웹훅 (알림이 발송되지 않는 상태)
+# 확인 후 이 파일은 삭제한다.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DISCORD_WEBHOOK_URL
+        env:
+          HOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "RESULT=EMPTY (시크릿 미설정)"
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$HOOK")
+          echo "RESULT=$code"
