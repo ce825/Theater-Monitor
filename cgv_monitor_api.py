@@ -24,6 +24,9 @@ CGV 내부 JSON API로 대체한 버전. 1회 스캔이 약 40초로 줄어들�
                               4DX와 취소표 알림은 보내지 않는다
     HEALTHCHECK_URL           매 사이클 핑을 보낼 healthchecks.io URL (선택)
     LOOP_SECONDS / LOOP_INTERVAL   --loop / --interval 기본값
+    REOPENED_ALERTS_ENABLED   "false"면 취소표(매진→예매가능) 알림을 보내지 않는다.
+                              무대인사·IMAX/4DX 모두에 적용된다. 신규 등록/예매오픈
+                              알림에는 영향 없음. 기본값은 켜짐(미설정 시 켜짐)
 """
 
 import argparse
@@ -74,6 +77,10 @@ STATUS_LABEL = {"preparing": "예매준비중", "sales_started": "예매오픈",
 # 1분 간격으로 보면 같은 회차의 취소표 알림이 몇 분 간격으로 반복되므로,
 # 같은 회차·같은 종류의 알림은 이 시간 안에 한 번만 보낸다.
 NOTIFY_COOLDOWN = {"reopened": 1800, "sales_started": 600, "preparing": 1800}
+
+# 취소표 알림 on/off 스위치. GitHub 저장소 변수(vars.REOPENED_ALERTS_ENABLED)로 제어한다.
+# "false"가 아니면 전부 켜짐으로 취급 - 값을 안 정해두면 기존처럼 알림이 나간다.
+REOPENED_ALERTS_ENABLED = os.environ.get("REOPENED_ALERTS_ENABLED", "true").strip().lower() != "false"
 
 
 def log(msg):
@@ -296,8 +303,12 @@ class Track:
                 kind = None
 
             if kind:
+                if kind == "reopened" and not REOPENED_ALERTS_ENABLED:
+                    # 사용자가 취소표 알림을 잠시 꺼둔 상태. 상태는 그대로 갱신하되 알리지 않는다.
+                    log(f"  [{self.name}] 취소표 알림 꺼짐 - 생략 "
+                        f"{item['movie']} {item['date']} {item['time']}")
                 # 잔여석이 0↔1을 오가며 같은 알림이 반복되는 것을 막는다
-                if self._cooldown_active(item, kind):
+                elif self._cooldown_active(item, kind):
                     log(f"  [{self.name}] 쿨다운으로 생략 [{STATUS_LABEL[kind]}] "
                         f"{item['movie']} {item['date']} {item['time']}")
                 else:
@@ -448,6 +459,7 @@ def main():
 
     deadline = time.time() + args.loop
     log(f"루프 시작 - {args.loop}초 동안 {args.interval}초 간격 감시 (대상: {', '.join(selected)})")
+    log(f"취소표 알림: {'켜짐' if REOPENED_ALERTS_ENABLED else '꺼짐 (REOPENED_ALERTS_ENABLED=false)'}")
 
     failures = 0
     while time.time() < deadline:

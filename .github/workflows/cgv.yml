@@ -43,6 +43,9 @@ jobs:
           # IMAX 신규 회차 등록 알림만 추가로 받을 채널 (미설정이면 발송 안 함)
           IMAX_OPEN_WEBHOOK_URL: ${{ secrets.IMAX_OPEN_WEBHOOK_URL }}
           HEALTHCHECK_URL: https://hc-ping.com/02f9bb64-cced-4d90-bab8-13691070f33f
+          # 취소표 알림 on/off. 저장소 Variables에서 REOPENED_ALERTS_ENABLED=false로 끌 수 있다.
+          # (Settings > Secrets and variables > Actions > Variables). 미설정이면 켜짐.
+          REOPENED_ALERTS_ENABLED: ${{ vars.REOPENED_ALERTS_ENABLED }}
         run: python cgv_monitor_api.py --loop 3000 --interval 60
 
       # API가 막히거나 스펙이 바뀌면 기존 Playwright 스크래퍼로 1회 확인한다.
