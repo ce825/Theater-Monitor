@@ -8,6 +8,7 @@ import requests
 import json
 import os
 import random
+import html
 from datetime import datetime, timezone, timedelta
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -124,7 +125,9 @@ def fetch_branch_events(brch, dates):
             result = response.json()
 
             for show in result.get("movieFormList", []):
-                movie_nm = show.get("movieNm", "")
+                # 메가박스 API가 &#40; 같은 HTML 숫자 엔티티로 텍스트를 내려준다.
+                # Discord는 이를 해석하지 않고 그대로 보여주므로 여기서 디코딩해둔다.
+                movie_nm = html.unescape(show.get("movieNm", ""))
                 event_div_cd = show.get("eventDivCd")
                 ctts_ty_div_cd = show.get("cttsTyDivCd")
 
@@ -141,13 +144,13 @@ def fetch_branch_events(brch, dates):
                             "movieNo": show.get("movieNo", ""),
                             "movieNm": movie_nm,
                             "brchNo": brch_no,
-                            "brchNm": brch_nm,
-                            "areaCdNm": brch.get("areaCdNm", ""),
+                            "brchNm": html.unescape(brch_nm),
+                            "areaCdNm": html.unescape(brch.get("areaCdNm", "")),
                             "playDe": date,
                             "playStartTime": show.get("playStartTime", ""),
                             "playEndTime": show.get("playEndTime", ""),
-                            "theabExpoNm": show.get("theabExpoNm", ""),
-                            "eventDivCdNm": show.get("eventDivCdNm", ""),
+                            "theabExpoNm": html.unescape(show.get("theabExpoNm", "")),
+                            "eventDivCdNm": html.unescape(show.get("eventDivCdNm", "")),
                             "restSeatCnt": show.get("restSeatCnt", 0),
                             "totSeatCnt": show.get("totSeatCnt", 0),
                             "bokdAbleAt": show.get("bokdAbleAt", "N"),
